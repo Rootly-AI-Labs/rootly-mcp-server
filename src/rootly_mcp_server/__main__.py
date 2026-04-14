@@ -203,8 +203,10 @@ def get_server():
     )
 
 
-# Create the server instance for FastMCP CLI (follows quickstart pattern)
-mcp = get_server()
+# Create the server instance for FastMCP CLI (follows quickstart pattern).
+# Avoid eager construction when executing `python -m rootly_mcp_server`, because
+# CLI flags like `--hosted` and `--transport` are parsed later in `main()`.
+mcp = get_server() if __name__ != "__main__" else None
 
 
 def run_dual_http_server(

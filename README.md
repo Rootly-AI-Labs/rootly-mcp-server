@@ -221,6 +221,8 @@ Add to `claude_desktop_config.json`:
         "-y",
         "mcp-remote",
         "https://mcp.rootly.com/mcp",
+        "--transport",
+        "http-only",
         "--header",
         "Authorization: Bearer <YOUR_ROOTLY_API_TOKEN>"
       ]
