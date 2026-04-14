@@ -256,7 +256,8 @@ def run_dual_http_server(
         stateless=stateless_http,
     )
     streamable_http_app = StreamableHTTPASGIApp(session_manager)
-    streamable_methods = ["POST", "DELETE"] if stateless_http else None
+    # Always allow POST for streamable HTTP - stateless mode only affects session persistence
+    streamable_methods = ["POST", "DELETE"]
 
     routes = [
         Route(sse_path, endpoint=sse_endpoint, methods=["GET"]),
