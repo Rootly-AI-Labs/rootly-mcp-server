@@ -143,8 +143,8 @@ def register_incident_tools(
         service_ids: str,
         severity: str,
         status: str,
-        start_time: str,
-        end_time: str,
+        started_after: str,
+        started_before: str,
         custom_field_selected_option_ids: str,
         sort: Literal["created_at", "-created_at", "updated_at", "-updated_at"],
     ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -178,10 +178,10 @@ def register_incident_tools(
             params["filter[severity]"] = severity
         if status:
             params["filter[status]"] = status
-        if start_time:
-            params["filter[started_at][gte]"] = start_time
-        if end_time:
-            params["filter[started_at][lte]"] = end_time
+        if started_after:
+            params["filter[started_at][gte]"] = started_after
+        if started_before:
+            params["filter[started_at][lte]"] = started_before
         if custom_field_selected_option_ids:
             params["filter[custom_field_selected_option_ids]"] = custom_field_selected_option_ids
 
@@ -194,8 +194,8 @@ def register_incident_tools(
             "service_ids": service_ids,
             "severity": severity,
             "status": status,
-            "start_time": start_time,
-            "end_time": end_time,
+            "started_after": started_after,
+            "started_before": started_before,
             "custom_field_selected_option_ids": custom_field_selected_option_ids,
             "sort": sort,
         }
@@ -240,16 +240,16 @@ def register_incident_tools(
                 description="Optional incident status filter (e.g., started, investigating, resolved)"
             ),
         ] = "",
-        start_time: Annotated[
+        started_after: Annotated[
             str,
             Field(
-                description="Filter incidents whose started_at is at or after this ISO 8601 timestamp"
+                description="Filter incidents that started at or after this ISO 8601 timestamp"
             ),
         ] = "",
-        end_time: Annotated[
+        started_before: Annotated[
             str,
             Field(
-                description="Filter incidents whose started_at is at or before this ISO 8601 timestamp"
+                description="Filter incidents that started at or before this ISO 8601 timestamp"
             ),
         ] = "",
         custom_field_selected_option_ids: Annotated[
@@ -287,8 +287,8 @@ def register_incident_tools(
                 service_ids=service_ids,
                 severity=severity,
                 status=status,
-                start_time=start_time,
-                end_time=end_time,
+                started_after=started_after,
+                started_before=started_before,
                 custom_field_selected_option_ids=custom_field_selected_option_ids,
                 sort=sort,
             )
@@ -366,16 +366,16 @@ def register_incident_tools(
                 description="Optional incident status filter (e.g., started, investigating, resolved)"
             ),
         ] = "",
-        start_time: Annotated[
+        started_after: Annotated[
             str,
             Field(
-                description="Filter incidents whose started_at is at or after this ISO 8601 timestamp"
+                description="Filter incidents that started at or after this ISO 8601 timestamp"
             ),
         ] = "",
-        end_time: Annotated[
+        started_before: Annotated[
             str,
             Field(
-                description="Filter incidents whose started_at is at or before this ISO 8601 timestamp"
+                description="Filter incidents that started at or before this ISO 8601 timestamp"
             ),
         ] = "",
         custom_field_selected_option_ids: Annotated[
@@ -421,8 +421,8 @@ def register_incident_tools(
                 service_ids=service_ids,
                 severity=severity,
                 status=status,
-                start_time=start_time,
-                end_time=end_time,
+                started_after=started_after,
+                started_before=started_before,
                 custom_field_selected_option_ids=custom_field_selected_option_ids,
                 sort=sort,
             )
