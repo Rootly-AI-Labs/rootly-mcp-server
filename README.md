@@ -270,7 +270,7 @@ Choose the token type based on the access you need:
 - **Team API Key**: Access limited to entities owned by that team.
 - **Personal API Key**: Access matches the user who created it.
 
-A **Global API Key** is recommended for tools like `get_oncall_handoff_summary`, `get_oncall_shift_metrics`, and org-wide incident search.
+A **Global API Key** is recommended for organization-wide queries and for actions that modify data, especially when workflows may span multiple teams, schedules, or incidents.
 
 ### With uv
 
@@ -363,7 +363,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **101 tools**.
+The default server configuration exposes **105 tools**.
 
 ### Custom Agentic Tools
 
