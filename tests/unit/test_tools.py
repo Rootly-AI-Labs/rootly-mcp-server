@@ -2,7 +2,7 @@
 Unit tests for custom MCP tool functions.
 
 Tests cover:
-- search_incidents function logic
+- list_incidents and search_incidents function logic
 - scoped incident update tool behavior
 - Parameter validation and defaults
 - Pagination handling (single page vs multi-page)
@@ -10,13 +10,13 @@ Tests cover:
 """
 
 from typing import Any
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
 from rootly_mcp_server.server import DEFAULT_ALLOWED_PATHS, create_rootly_mcp_server
 from rootly_mcp_server.server_defaults import _generate_recommendation
-from rootly_mcp_server.tools.incidents import register_incident_tools
+from rootly_mcp_server.tools.incidents import INCIDENT_LIST_FIELDS, register_incident_tools
 
 
 class FakeMCP:
@@ -284,3 +284,428 @@ class TestScopedIncidentUpdateTool:
         assert await_args is not None
         kwargs = await_args.kwargs
         assert "retrospective_progress_status" in kwargs["params"]["fields[incidents]"]
+
+
+@pytest.mark.unit
+class TestStructuredListIncidentsTool:
+    """Test the structured list_incidents tool."""
+
+    def _register_tools(self):
+        mcp = FakeMCP()
+        request = AsyncMock()
+        register_incident_tools(
+            mcp=mcp,
+            make_authenticated_request=request,
+            strip_heavy_nested_data=lambda data: data,
+            mcp_error=FakeMCPError(),
+            generate_recommendation=_generate_recommendation,
+        )
+        return mcp.tools, request
+
+    @pytest.mark.asyncio
+    async def test_list_incidents_tool_is_registered(self):
+        tools, _ = self._register_tools()
+
+        assert "list_incidents" in tools
+
+    @pytest.mark.asyncio
+    async def test_list_incidents_passes_structured_filters_and_returns_compact_results(self):
+        tools, request = self._register_tools()
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": [
+                {
+                    "id": "inc-123",
+                    "type": "incidents",
+                    "attributes": {
+                        "sequential_id": 829,
+                        "title": "Database timeout in production",
+                        "summary": "Primary database connection pool exhausted",
+                        "status": "resolved",
+                        "severity": {
+                            "data": {
+                                "attributes": {
+                                    "name": "Critical",
+                                    "slug": "critical",
+                                }
+                            }
+                        },
+                        "started_at": "2026-04-10T15:00:00Z",
+                        "resolved_at": "2026-04-10T15:45:00Z",
+                        "created_at": "2026-04-10T15:00:10Z",
+                        "updated_at": "2026-04-10T15:46:00Z",
+                        "retrospective_progress_status": "active",
+                        "url": "https://rootly.com/account/incidents/inc-123",
+                    },
+                }
+            ],
+            "meta": {
+                "current_page": 2,
+                "next_page": 3,
+                "prev_page": 1,
+                "total_pages": 4,
+                "total_count": 70,
+            },
+        }
+        request.return_value = response
+
+        result = await tools["list_incidents"](
+            query="database timeout",
+            team_ids="123,456",
+            service_ids="svc-1",
+            severity="critical",
+            status="resolved",
+            start_time="2026-04-01T00:00:00Z",
+            end_time="2026-04-13T23:59:59Z",
+            custom_field_selected_option_ids="opt-1,opt-2",
+            sort="-updated_at",
+            page_size=25,
+            page_number=2,
+        )
+
+        request.assert_awaited_once_with(
+            "GET",
+            "/v1/incidents",
+            params={
+                "page[size]": 25,
+                "page[number]": 2,
+                "fields[incidents]": INCIDENT_LIST_FIELDS,
+                "include": "",
+                "sort": "-updated_at",
+                "filter[search]": "database timeout",
+                "filter[team_ids]": "123,456",
+                "filter[service_ids]": "svc-1",
+                "filter[severity]": "critical",
+                "filter[status]": "resolved",
+                "filter[started_at][gte]": "2026-04-01T00:00:00Z",
+                "filter[started_at][lte]": "2026-04-13T23:59:59Z",
+                "filter[custom_field_selected_option_ids]": "opt-1,opt-2",
+            },
+        )
+
+        assert result["returned_incidents"] == 1
+        assert result["pagination"]["has_more"] is True
+        assert result["pagination"]["total_count"] == 70
+        assert result["filters"]["team_ids"] == "123,456"
+        assert result["incidents"] == [
+            {
+                "incident_id": "inc-123",
+                "incident_number": "INC-829",
+                "title": "Database timeout in production",
+                "summary": "Primary database connection pool exhausted",
+                "status": "resolved",
+                "severity": "critical",
+                "started_at": "2026-04-10T15:00:00Z",
+                "resolved_at": "2026-04-10T15:45:00Z",
+                "created_at": "2026-04-10T15:00:10Z",
+                "updated_at": "2026-04-10T15:46:00Z",
+                "retrospective_progress_status": "active",
+                "url": "https://rootly.com/account/incidents/inc-123",
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_list_incidents_resolves_team_names_to_ids(self):
+        tools, request = self._register_tools()
+
+        slug_response = Mock()
+        slug_response.raise_for_status.return_value = None
+        slug_response.json.return_value = {"data": []}
+
+        name_response = Mock()
+        name_response.raise_for_status.return_value = None
+        name_response.json.return_value = {
+            "data": [
+                {
+                    "id": "team-123",
+                    "type": "teams",
+                    "attributes": {
+                        "name": "Infrastructure",
+                        "slug": "infrastructure",
+                    },
+                }
+            ]
+        }
+
+        incidents_response = Mock()
+        incidents_response.raise_for_status.return_value = None
+        incidents_response.json.return_value = {
+            "data": [],
+            "meta": {"current_page": 1, "next_page": None, "total_pages": 1, "total_count": 0},
+        }
+
+        request.side_effect = [slug_response, name_response, incidents_response]
+
+        result = await tools["list_incidents"](
+            teams="Infrastructure",
+            page_size=10,
+            page_number=1,
+        )
+
+        assert request.await_args_list == [
+            call(
+                "GET",
+                "/v1/teams",
+                params={
+                    "page[size]": 100,
+                    "page[number]": 1,
+                    "filter[slug]": "Infrastructure",
+                },
+            ),
+            call(
+                "GET",
+                "/v1/teams",
+                params={
+                    "page[size]": 100,
+                    "page[number]": 1,
+                    "filter[name]": "Infrastructure",
+                },
+            ),
+            call(
+                "GET",
+                "/v1/incidents",
+                params={
+                    "page[size]": 10,
+                    "page[number]": 1,
+                    "fields[incidents]": INCIDENT_LIST_FIELDS,
+                    "include": "",
+                    "sort": "-created_at",
+                    "filter[team_ids]": "team-123",
+                },
+            ),
+        ]
+        assert result["filters"]["teams"] == "Infrastructure"
+        assert result["filters"]["resolved_team_ids"] == "team-123"
+        assert result["filters"]["resolved_team_lookup"] == {"Infrastructure": "team-123"}
+
+    @pytest.mark.asyncio
+    async def test_list_incidents_returns_validation_error_when_team_name_cannot_be_resolved(self):
+        tools, request = self._register_tools()
+
+        slug_response = Mock()
+        slug_response.raise_for_status.return_value = None
+        slug_response.json.return_value = {"data": []}
+
+        name_response = Mock()
+        name_response.raise_for_status.return_value = None
+        name_response.json.return_value = {"data": []}
+
+        request.side_effect = [slug_response, name_response]
+
+        result = await tools["list_incidents"](teams="Infrastructure")
+
+        assert result["error"] is True
+        assert result["error_type"] == "validation_error"
+        assert "Could not resolve team names/slugs" in result["message"]
+
+
+@pytest.mark.unit
+class TestCollectIncidentsTool:
+    """Test the bounded bulk incident collection tool."""
+
+    def _register_tools(self):
+        mcp = FakeMCP()
+        request = AsyncMock()
+        register_incident_tools(
+            mcp=mcp,
+            make_authenticated_request=request,
+            strip_heavy_nested_data=lambda data: data,
+            mcp_error=FakeMCPError(),
+            generate_recommendation=_generate_recommendation,
+        )
+        return mcp.tools, request
+
+    @pytest.mark.asyncio
+    async def test_collect_incidents_tool_is_registered(self):
+        tools, _ = self._register_tools()
+
+        assert "collect_incidents" in tools
+
+    @pytest.mark.asyncio
+    async def test_collect_incidents_resolves_team_names_and_collects_across_pages(self):
+        tools, request = self._register_tools()
+
+        slug_response = Mock()
+        slug_response.raise_for_status.return_value = None
+        slug_response.json.return_value = {"data": []}
+
+        name_response = Mock()
+        name_response.raise_for_status.return_value = None
+        name_response.json.return_value = {
+            "data": [
+                {
+                    "id": "team-123",
+                    "type": "teams",
+                    "attributes": {
+                        "name": "Infrastructure",
+                        "slug": "infrastructure",
+                    },
+                }
+            ]
+        }
+
+        incidents_page_one = Mock()
+        incidents_page_one.raise_for_status.return_value = None
+        incidents_page_one.json.return_value = {
+            "data": [
+                {
+                    "id": "inc-1",
+                    "type": "incidents",
+                    "attributes": {
+                        "sequential_id": 101,
+                        "title": "Database saturation",
+                        "summary": "Primary database maxed out",
+                        "status": "resolved",
+                        "severity": "critical",
+                        "started_at": "2026-04-10T10:00:00Z",
+                        "resolved_at": "2026-04-10T10:20:00Z",
+                        "created_at": "2026-04-10T10:00:05Z",
+                        "updated_at": "2026-04-10T10:21:00Z",
+                        "retrospective_progress_status": "active",
+                        "url": "https://rootly.com/account/incidents/inc-1",
+                    },
+                },
+                {
+                    "id": "inc-2",
+                    "type": "incidents",
+                    "attributes": {
+                        "sequential_id": 102,
+                        "title": "Cache cluster degraded",
+                        "summary": "Redis failover took too long",
+                        "status": "resolved",
+                        "severity": "high",
+                        "started_at": "2026-04-10T11:00:00Z",
+                        "resolved_at": "2026-04-10T11:15:00Z",
+                        "created_at": "2026-04-10T11:00:05Z",
+                        "updated_at": "2026-04-10T11:16:00Z",
+                        "retrospective_progress_status": "not_started",
+                        "url": "https://rootly.com/account/incidents/inc-2",
+                    },
+                },
+            ],
+            "meta": {
+                "current_page": 1,
+                "next_page": 2,
+                "prev_page": None,
+                "total_pages": 3,
+                "total_count": 5,
+            },
+        }
+
+        incidents_page_two = Mock()
+        incidents_page_two.raise_for_status.return_value = None
+        incidents_page_two.json.return_value = {
+            "data": [
+                {
+                    "id": "inc-3",
+                    "type": "incidents",
+                    "attributes": {
+                        "sequential_id": 103,
+                        "title": "Service mesh instability",
+                        "summary": "Ingress latency spiked",
+                        "status": "resolved",
+                        "severity": "medium",
+                        "started_at": "2026-04-10T12:00:00Z",
+                        "resolved_at": "2026-04-10T12:10:00Z",
+                        "created_at": "2026-04-10T12:00:05Z",
+                        "updated_at": "2026-04-10T12:11:00Z",
+                        "retrospective_progress_status": "completed",
+                        "url": "https://rootly.com/account/incidents/inc-3",
+                    },
+                },
+                {
+                    "id": "inc-4",
+                    "type": "incidents",
+                    "attributes": {
+                        "sequential_id": 104,
+                        "title": "Background job backlog",
+                        "summary": "Queue depth kept rising",
+                        "status": "investigating",
+                        "severity": "medium",
+                        "started_at": "2026-04-10T13:00:00Z",
+                        "resolved_at": None,
+                        "created_at": "2026-04-10T13:00:05Z",
+                        "updated_at": "2026-04-10T13:05:00Z",
+                        "retrospective_progress_status": "not_started",
+                        "url": "https://rootly.com/account/incidents/inc-4",
+                    },
+                },
+            ],
+            "meta": {
+                "current_page": 2,
+                "next_page": 3,
+                "prev_page": 1,
+                "total_pages": 3,
+                "total_count": 5,
+            },
+        }
+
+        request.side_effect = [slug_response, name_response, incidents_page_one, incidents_page_two]
+
+        result = await tools["collect_incidents"](
+            teams="Infrastructure",
+            max_results=3,
+            batch_size=2,
+        )
+
+        assert request.await_args_list == [
+            call(
+                "GET",
+                "/v1/teams",
+                params={
+                    "page[size]": 100,
+                    "page[number]": 1,
+                    "filter[slug]": "Infrastructure",
+                },
+            ),
+            call(
+                "GET",
+                "/v1/teams",
+                params={
+                    "page[size]": 100,
+                    "page[number]": 1,
+                    "filter[name]": "Infrastructure",
+                },
+            ),
+            call(
+                "GET",
+                "/v1/incidents",
+                params={
+                    "fields[incidents]": INCIDENT_LIST_FIELDS,
+                    "include": "",
+                    "sort": "-created_at",
+                    "filter[team_ids]": "team-123",
+                    "page[size]": 2,
+                    "page[number]": 1,
+                },
+            ),
+            call(
+                "GET",
+                "/v1/incidents",
+                params={
+                    "fields[incidents]": INCIDENT_LIST_FIELDS,
+                    "include": "",
+                    "sort": "-created_at",
+                    "filter[team_ids]": "team-123",
+                    "page[size]": 2,
+                    "page[number]": 2,
+                },
+            ),
+        ]
+
+        assert result["returned_incidents"] == 3
+        assert result["collection"] == {
+            "max_results": 3,
+            "batch_size": 2,
+            "pages_fetched": 2,
+            "total_matching_count": 5,
+            "results_truncated": True,
+        }
+        assert result["filters"]["teams"] == "Infrastructure"
+        assert result["filters"]["resolved_team_lookup"] == {"Infrastructure": "team-123"}
+        assert [incident["incident_number"] for incident in result["incidents"]] == [
+            "INC-101",
+            "INC-102",
+            "INC-103",
+        ]

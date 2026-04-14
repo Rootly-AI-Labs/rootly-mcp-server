@@ -61,6 +61,9 @@ DEFAULT_ALLOWED_PATHS = [
     "/incident_action_items",
     "/incident_action_items/{incident_action_item_id}",
     "/incidents/{incident_id}/action_items",
+    # Incident form field selections (used for incident custom field values)
+    "/incidents/{incident_id}/form_field_selections",
+    "/incident_form_field_selections/{id}",
     # Workflows
     "/workflows",
     "/workflows/{workflow_id}",
