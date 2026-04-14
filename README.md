@@ -17,7 +17,7 @@ Use the hosted MCP server. No local installation required.
 ### Hosted Transport Options
 
 - **Streamable HTTP (recommended):** `https://mcp.rootly.com/mcp`
-- **SSE (fallback):** `https://mcp.rootly.com/sse`
+- **SSE (stable alternative):** `https://mcp.rootly.com/sse`
 - **Code Mode:** `https://mcp.rootly.com/mcp-codemode`
 
 ### General Remote Setup
@@ -37,7 +37,7 @@ Default remote config (HTTP streamable):
 }
 ```
 
-SSE fallback:
+SSE (alternative):
 
 ```json
 {
@@ -88,7 +88,7 @@ claude mcp add rootly-codemode --transport http https://mcp.rootly.com/mcp-codem
   --header "Authorization: Bearer YOUR_ROOTLY_API_TOKEN"
 ```
 
-SSE fallback:
+SSE (alternative):
 
 ```bash
 claude mcp add --transport sse rootly-sse https://mcp.rootly.com/sse \
@@ -222,7 +222,7 @@ Add to `claude_desktop_config.json`:
         "mcp-remote",
         "https://mcp.rootly.com/mcp",
         "--transport",
-        "http-only",
+        "http",
         "--header",
         "Authorization: Bearer <YOUR_ROOTLY_API_TOKEN>"
       ]
