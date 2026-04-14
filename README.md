@@ -212,6 +212,8 @@ bearer_token_env_var = "ROOTLY_API_TOKEN"
 
 Add to `claude_desktop_config.json`:
 
+> **Note:** The `--transport http` flag ensures HTTP streamable transport is used instead of auto-falling back to SSE.
+
 ```json
 {
   "mcpServers": {
