@@ -5,6 +5,19 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.16] - Released 2026-04-13
+
+### Enhanced
+
+- **Improved parameter naming in `list_incidents`**: Renamed `start_time`/`end_time` to `started_after`/`started_before` for clarity
+- **Enhanced team resolution logic**: Better handling of team name variations and edge cases
+- **Better parameter descriptions**: More accurate and unambiguous field descriptions
+
+### Fixes
+
+- Fixed confusing parameter semantics where `end_time` actually filtered `started_at` field
+- Improved input validation for time-based filtering parameters
+
 ## [2.2.15] - Released 2026-04-10
 
 ### Highlights
