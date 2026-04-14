@@ -103,8 +103,8 @@ Create `.mcp.json` in your project root:
 {
   "mcpServers": {
     "rootly": {
-      "type": "sse",
-      "url": "https://mcp.rootly.com/sse",
+      "type": "http",
+      "url": "https://mcp.rootly.com/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_ROOTLY_API_TOKEN"
       }
@@ -352,7 +352,7 @@ docker run -p 8000:8000 \
 ## Features
 
 - **Dynamic Tool Generation**: Automatically creates MCP resources from Rootly's OpenAPI (Swagger) specification
-- **Smart Pagination**: Defaults to 10 items per request for incident endpoints to prevent context window overflow
+- **Smart Pagination**: Uses bounded pagination and compact incident responses to prevent context window overflow
 - **API Filtering**: Limits exposed API endpoints for security and performance
 - **Intelligent Incident Analysis**: Smart tools that analyze historical incident data
   - **`find_related_incidents`**: Uses TF-IDF similarity analysis to find historically similar incidents
@@ -369,6 +369,7 @@ The default server configuration exposes **105 tools**.
 
 - `check_oncall_health_risk`
 - `check_responder_availability`
+- `collect_incidents`
 - `create_override_recommendation`
 - `find_related_incidents`
 - `getIncident` - retrieve a single incident for direct verification, including PIR-related fields
@@ -379,6 +380,7 @@ The default server configuration exposes **105 tools**.
 - `get_server_version`
 - `get_shift_incidents`
 - `list_endpoints`
+- `list_incidents`
 - `list_shifts`
 - `search_incidents`
 - `suggest_solutions`
@@ -396,6 +398,7 @@ createEscalationPath
 createEscalationPolicy
 createFunctionality
 createIncidentActionItem
+createIncidentFormFieldSelection
 createIncidentType
 createOnCallRole
 createOnCallShadow
@@ -420,6 +423,7 @@ getEscalationLevel
 getEscalationPath
 getEscalationPolicy
 getFunctionality
+getIncidentFormFieldSelection
 getIncidentType
 getOnCallRole
 getOnCallShadow
@@ -441,6 +445,7 @@ listEscalationPolicies
 listFunctionalities
 listIncidentActionItems
 listIncidentAlerts
+listIncidentFormFieldSelections
 listIncident_Types
 listOnCallRoles
 listOnCallShadows
@@ -461,6 +466,7 @@ updateEscalationLevel
 updateEscalationPath
 updateEscalationPolicy
 updateFunctionality
+updateIncidentFormFieldSelection
 updateIncidentType
 updateOnCallRole
 updateOnCallShadow
@@ -490,7 +496,7 @@ Set the `ONCALLHEALTH_API_KEY` environment variable:
   "mcpServers": {
     "rootly": {
       "command": "uvx",
-      "args": ["rootly-mcp-server"],
+      "args": ["--from", "rootly-mcp-server", "rootly-mcp-server"],
       "env": {
         "ROOTLY_API_TOKEN": "your_rootly_token",
         "ONCALLHEALTH_API_KEY": "och_live_your_key"
