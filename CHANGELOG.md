@@ -5,6 +5,26 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.17] - Released 2026-04-14
+
+### Fixes
+
+- **Critical HTTP Streamable Transport Fix**: Fixed Route configuration where `stateless_http=False` caused `streamable_methods=None`, breaking the `/mcp` endpoint
+- **Transport Reliability**: Always allow POST and DELETE methods for HTTP streamable endpoints, resolving "streamable HTTP not working" reports
+- **Client Configuration**: Added transport flag explanation in README to prevent auto-fallback from HTTP streamable to SSE
+
+### Security
+
+- **Dependency Updates**: Updated `cryptography` from 46.0.6 to 46.0.7 (CVE fix)
+- **Testing Framework**: Updated `pytest` from 8.0.0 to 9.0.3 (CVE fix)
+- **Vulnerability Resolution**: Addressed 2 medium severity Dependabot alerts
+
+### Documentation
+
+- **Transport Recommendations**: Restored Streamable HTTP as recommended transport (now that it's fixed)
+- **Configuration Examples**: Fixed Claude Code transport option from `http-only` to `http`
+- **User Guidance**: Added explanatory notes for forcing HTTP streamable transport in clients
+
 ## [2.2.16] - Released 2026-04-13
 
 ### Enhanced
