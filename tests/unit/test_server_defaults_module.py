@@ -9,6 +9,8 @@ class TestServerDefaultsModule:
     def test_default_allowed_paths_contains_core_endpoints(self):
         assert "/alerts" in DEFAULT_ALLOWED_PATHS
         assert "/incidents/{incident_id}/alerts" in DEFAULT_ALLOWED_PATHS
+        assert "/incidents/{incident_id}/form_field_selections" in DEFAULT_ALLOWED_PATHS
+        assert "/incident_form_field_selections/{id}" in DEFAULT_ALLOWED_PATHS
         assert "/shifts" in DEFAULT_ALLOWED_PATHS
         assert "/on_call_roles" in DEFAULT_ALLOWED_PATHS
 

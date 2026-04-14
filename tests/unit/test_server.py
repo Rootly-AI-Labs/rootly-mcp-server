@@ -195,6 +195,28 @@ class TestServerCreation:
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+class TestBundledIncidentFormFieldSelectionTools:
+    """Verify the bundled swagger exposes the intended incident custom field tools."""
+
+    async def test_incident_form_field_selection_tools_are_available(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert "createIncidentActionItem" in tool_names
+        assert "listIncidentActionItems" in tool_names
+
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "listIncidentFormFieldSelections" in tool_names
+        assert "getIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
+
+        assert "deleteIncidentFormFieldSelection" not in tool_names
+
+
+@pytest.mark.unit
 class TestAuthenticatedHTTPXClient:
     """Test the HTTP client wrapper functionality."""
 
