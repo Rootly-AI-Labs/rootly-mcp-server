@@ -5,6 +5,30 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.18] - Released 2026-04-15
+
+### Features
+
+- **Workflow Task Tools**: Added complete workflow task management tools to enable creation, listing, retrieval, and updating of workflow actions/tasks
+- **Enhanced Workflow Functionality**: Users can now build complete functional workflows instead of just workflow shells
+
+### New Tools
+
+- `createWorkflowTask` - Create new workflow actions (POST `/v1/workflows/{workflow_id}/workflow_tasks`)
+- `listWorkflowTasks` - List all actions in a workflow (GET `/v1/workflows/{workflow_id}/workflow_tasks`)  
+- `getWorkflowTask` - Retrieve specific workflow action details (GET `/v1/workflow_tasks/{id}`)
+- `updateWorkflowTask` - Modify existing workflow actions (PUT `/v1/workflow_tasks/{id}`)
+
+### Documentation
+
+- **Tool Count Updated**: Increased from 105 to 109 tools reflecting new workflow task capabilities
+- **Tool List Updated**: Added workflow task tools to OpenAPI-generated tools section
+- **Badge Cleanup**: Removed broken Cursor install badge
+
+### Security
+
+- **Delete Operations**: `deleteWorkflowTask` remains intentionally excluded following security policy for destructive operations
+
 ## [2.2.17] - Released 2026-04-14
 
 ### Fixes

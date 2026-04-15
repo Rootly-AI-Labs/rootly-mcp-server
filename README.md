@@ -366,7 +366,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **109 tools**.
+The default server configuration exposes **110 tools**.
 
 ### Custom Agentic Tools
 
