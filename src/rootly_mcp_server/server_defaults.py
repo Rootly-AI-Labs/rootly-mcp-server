@@ -67,6 +67,8 @@ DEFAULT_ALLOWED_PATHS = [
     # Workflows
     "/workflows",
     "/workflows/{workflow_id}",
+    "/workflows/{workflow_id}/workflow_tasks",
+    "/workflow_tasks/{id}",
     # Workflow runs
     "/workflow_runs",
     "/workflow_runs/{workflow_run_id}",

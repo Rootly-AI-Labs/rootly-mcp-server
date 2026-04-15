@@ -215,6 +215,19 @@ class TestBundledIncidentFormFieldSelectionTools:
 
         assert "deleteIncidentFormFieldSelection" not in tool_names
 
+    async def test_workflow_task_tools_are_available_without_delete(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert "createWorkflowTask" in tool_names
+        assert "listWorkflowTasks" in tool_names
+        assert "getWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+
+        assert "deleteWorkflowTask" not in tool_names
+
 
 @pytest.mark.unit
 class TestAuthenticatedHTTPXClient:
