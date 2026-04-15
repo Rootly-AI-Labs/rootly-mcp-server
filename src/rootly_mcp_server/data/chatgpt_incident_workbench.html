@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rootly Incident Workbench</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --panel: #ffffff;
+        --panel-muted: #eef3fb;
+        --text: #10203a;
+        --muted: #5f708d;
+        --line: #d7deea;
+        --accent: #1273ea;
+        --accent-soft: #deebff;
+        --critical: #c73d3d;
+        --high: #da6b1e;
+        --medium: #6f5de3;
+        --low: #268b62;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: linear-gradient(180deg, #f8fbff 0%, #eef3f9 100%);
+        color: var(--text);
+      }
+
+      body {
+        padding: 16px;
+      }
+
+      main {
+        display: grid;
+        gap: 16px;
+      }
+
+      .shell {
+        background: var(--panel);
+        border: 1px solid rgba(16, 32, 58, 0.08);
+        border-radius: 18px;
+        box-shadow: 0 14px 40px rgba(21, 46, 86, 0.08);
+        overflow: hidden;
+      }
+
+      .hero {
+        padding: 20px 20px 16px;
+        background:
+          radial-gradient(circle at top right, rgba(18, 115, 234, 0.18), transparent 34%),
+          linear-gradient(135deg, #ffffff 0%, #f5f9ff 100%);
+        border-bottom: 1px solid rgba(16, 32, 58, 0.08);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 14px 0 6px;
+        font-size: 24px;
+        line-height: 1.1;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 720px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .pill strong {
+        color: var(--text);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        padding: 16px;
+      }
+
+      @media (min-width: 960px) {
+        .grid {
+          grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+        }
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .panel-subtitle {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 14px 18px 0;
+      }
+
+      .filter-chip {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--panel-muted);
+        color: var(--text);
+        font-size: 12px;
+      }
+
+      .incident-list {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .incident-row {
+        border: 0;
+        background: transparent;
+        width: 100%;
+        text-align: left;
+        padding: 16px 18px;
+        border-top: 1px solid var(--line);
+        cursor: pointer;
+      }
+
+      .incident-row:hover {
+        background: #f8fbff;
+      }
+
+      .incident-row.active {
+        background: #edf5ff;
+      }
+
+      .incident-topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .incident-number {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+
+      .severity {
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .severity.critical { background: rgba(199, 61, 61, 0.12); color: var(--critical); }
+      .severity.high { background: rgba(218, 107, 30, 0.12); color: var(--high); }
+      .severity.medium { background: rgba(111, 93, 227, 0.12); color: var(--medium); }
+      .severity.low { background: rgba(38, 139, 98, 0.12); color: var(--low); }
+      .severity.unknown { background: rgba(95, 112, 141, 0.12); color: var(--muted); }
+
+      .incident-title {
+        margin: 0 0 8px;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .incident-summary {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .incident-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .detail {
+        padding: 18px;
+      }
+
+      .detail-empty {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .detail h2 {
+        margin: 0 0 10px;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      .detail-section {
+        margin-top: 18px;
+      }
+
+      .detail-section h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+      }
+
+      .detail-section p {
+        margin: 0;
+        line-height: 1.55;
+        color: var(--text);
+        white-space: pre-wrap;
+      }
+
+      .detail-link {
+        display: inline-flex;
+        margin-top: 16px;
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+
+      .status {
+        text-transform: capitalize;
+      }
+
+      .empty-state {
+        padding: 28px 18px 32px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .error {
+        padding: 18px;
+        color: var(--critical);
+        background: rgba(199, 61, 61, 0.06);
+        border: 1px solid rgba(199, 61, 61, 0.12);
+        border-radius: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+    <script type="module">
+      const appEl = document.getElementById("app");
+
+      const state = {
+        workbench: null,
+        detail: null,
+        error: null,
+      };
+
+      let rpcId = 0;
+      const pending = new Map();
+
+      const render = () => {
+        if (state.error) {
+          appEl.innerHTML = `<section class="error">${escapeHtml(state.error)}</section>`;
+          return;
+        }
+
+        const workbench = state.workbench;
+        if (!workbench) {
+          appEl.innerHTML = `
+            <section class="shell">
+              <div class="hero">
+                <div class="eyebrow">Rootly App</div>
+                <h1>Incident Workbench</h1>
+                <p>Ask ChatGPT to open the Rootly incident workbench with filters like team, time range, status, or severity.</p>
+              </div>
+              <div class="empty-state">
+                Waiting for incident data. Try a prompt like “Open the Rootly incident workbench for Infrastructure incidents from the last 7 days.”
+              </div>
+            </section>
+          `;
+          return;
+        }
+
+        const incidents = workbench.incidents || [];
+        const filters = workbench.filters || {};
+        const collection = workbench.collection || {};
+        const selectedIncidentId = state.detail?.incident?.incident_id;
+        const filterChips = buildFilterChips(filters);
+
+        appEl.innerHTML = `
+          <section class="shell">
+            <div class="hero">
+              <div class="eyebrow">Rootly App</div>
+              <h1>${escapeHtml(workbench.title || "Rootly Incident Workbench")}</h1>
+              <p>Browse incident history, apply structured filters, and open the incidents that matter without leaving the conversation.</p>
+              <div class="meta-row">
+                <div class="pill"><strong>${incidents.length}</strong> incidents loaded</div>
+                <div class="pill"><strong>${collection.total_matching_count ?? incidents.length}</strong> matching total</div>
+                <div class="pill"><strong>${collection.results_truncated ? "Yes" : "No"}</strong> truncated</div>
+              </div>
+            </div>
+            <div class="grid">
+              <section class="panel">
+                <div class="panel-header">
+                  <h2 class="panel-title">Filtered incidents</h2>
+                  <div class="panel-subtitle">Click an incident to open the detail pane</div>
+                </div>
+                ${filterChips ? `<div class="filters">${filterChips}</div>` : ""}
+                <div class="incident-list">
+                  ${incidents.length ? incidents.map((incident) => renderIncidentRow(incident, selectedIncidentId)).join("") : `
+                    <div class="empty-state">
+                      No incidents matched the current filters.
+                    </div>
+                  `}
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-header">
+                  <h2 class="panel-title">Incident detail</h2>
+                  <div class="panel-subtitle">Rootly detail view</div>
+                </div>
+                <div class="detail">
+                  ${renderDetail(state.detail?.incident)}
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+
+        Array.from(document.querySelectorAll(".incident-row")).forEach((row) => {
+          row.addEventListener("click", async () => {
+            const incidentId = row.getAttribute("data-incident-id");
+            if (!incidentId) return;
+            try {
+              await callTool("get_rootly_incident_detail", { incident_id: incidentId });
+            } catch (error) {
+              state.error = error instanceof Error ? error.message : String(error);
+              render();
+            }
+          });
+        });
+      };
+
+      const renderIncidentRow = (incident, selectedIncidentId) => {
+        const severity = normalizeSeverity(incident.severity);
+        const classes = ["incident-row"];
+        if (incident.incident_id === selectedIncidentId) classes.push("active");
+
+        return `
+          <button class="${classes.join(" ")}" data-incident-id="${escapeHtml(incident.incident_id || "")}">
+            <div class="incident-topline">
+              <div class="incident-number">${escapeHtml(incident.incident_number || incident.incident_id || "Incident")}</div>
+              <div class="severity ${severity.className}">${escapeHtml(severity.label)}</div>
+            </div>
+            <p class="incident-title">${escapeHtml(incident.title || "Untitled incident")}</p>
+            <p class="incident-summary">${escapeHtml(incident.summary || "No summary available.")}</p>
+            <div class="incident-meta">
+              <span class="status">${escapeHtml(incident.status || "unknown")}</span>
+              <span>Started ${escapeHtml(formatDate(incident.started_at))}</span>
+              <span>Updated ${escapeHtml(formatDate(incident.updated_at))}</span>
+            </div>
+          </button>
+        `;
+      };
+
+      const renderDetail = (incident) => {
+        if (!incident) {
+          return `<div class="detail-empty">Select an incident to open title, summary, mitigation, and retrospective context here.</div>`;
+        }
+
+        const severity = normalizeSeverity(incident.severity);
+        return `
+          <div class="incident-topline">
+            <div class="incident-number">${escapeHtml(incident.incident_number || incident.incident_id || "Incident")}</div>
+            <div class="severity ${severity.className}">${escapeHtml(severity.label)}</div>
+          </div>
+          <h2>${escapeHtml(incident.title || "Untitled incident")}</h2>
+          <div class="incident-meta">
+            <span class="status">${escapeHtml(incident.status || "unknown")}</span>
+            <span>Started ${escapeHtml(formatDate(incident.started_at))}</span>
+            <span>Resolved ${escapeHtml(formatDate(incident.resolved_at))}</span>
+          </div>
+          ${renderDetailSection("Summary", incident.summary)}
+          ${renderDetailSection("Customer impact", incident.customer_impact_summary)}
+          ${renderDetailSection("Mitigation", incident.mitigation)}
+          ${renderDetailSection("Resolution", incident.resolution)}
+          ${renderDetailSection("Retrospective status", incident.retrospective_progress_status)}
+          ${incident.url ? `<a class="detail-link" href="${escapeHtml(incident.url)}" target="_blank" rel="noreferrer">Open incident in Rootly</a>` : ""}
+        `;
+      };
+
+      const renderDetailSection = (label, value) => {
+        if (!value) return "";
+        return `
+          <section class="detail-section">
+            <h3>${escapeHtml(label)}</h3>
+            <p>${escapeHtml(value)}</p>
+          </section>
+        `;
+      };
+
+      const buildFilterChips = (filters) => {
+        const chips = [];
+        if (filters.teams) chips.push(`Teams: ${filters.teams}`);
+        if (filters.severity) chips.push(`Severity: ${filters.severity}`);
+        if (filters.status) chips.push(`Status: ${filters.status}`);
+        if (filters.started_after || filters.started_before) {
+          chips.push(`Started: ${filters.started_after || "…"} to ${filters.started_before || "…"}`);
+        }
+        if (filters.query) chips.push(`Query: ${filters.query}`);
+        return chips.map((chip) => `<div class="filter-chip">${escapeHtml(chip)}</div>`).join("");
+      };
+
+      const normalizeSeverity = (severity) => {
+        const value = String(severity || "unknown").toLowerCase();
+        if (["sev1", "critical", "urgent", "highest"].includes(value)) {
+          return { className: "critical", label: value };
+        }
+        if (["sev2", "high"].includes(value)) {
+          return { className: "high", label: value };
+        }
+        if (["sev3", "medium"].includes(value)) {
+          return { className: "medium", label: value };
+        }
+        if (["sev4", "low"].includes(value)) {
+          return { className: "low", label: value };
+        }
+        return { className: "unknown", label: value };
+      };
+
+      const formatDate = (value) => {
+        if (!value) return "n/a";
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+        return parsed.toLocaleString();
+      };
+
+      const escapeHtml = (value) =>
+        String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#039;");
+
+      const handleToolResult = (toolResult) => {
+        const data = toolResult?.structuredContent;
+        if (!data) return;
+
+        if (data.view === "incident_workbench") {
+          state.workbench = data;
+          if (!state.detail || !state.detail.incident) {
+            state.detail = null;
+          }
+          state.error = null;
+          render();
+          return;
+        }
+
+        if (data.view === "incident_detail") {
+          state.detail = data;
+          state.error = null;
+          render();
+          return;
+        }
+
+        if (data.view === "error") {
+          state.error = data.message || "Something went wrong.";
+          render();
+        }
+      };
+
+      const rpcRequest = (method, params) =>
+        new Promise((resolve, reject) => {
+          const id = ++rpcId;
+          pending.set(id, { resolve, reject });
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+        });
+
+      const callTool = async (name, args) => {
+        if (window.openai?.callTool) {
+          const result = await window.openai.callTool(name, args);
+          handleToolResult(result);
+          return result;
+        }
+        const response = await rpcRequest("tools/call", { name, arguments: args });
+        const result = response?.result || response;
+        handleToolResult(result);
+        return result;
+      };
+
+      window.addEventListener(
+        "message",
+        (event) => {
+          if (event.source !== window.parent) return;
+          const message = event.data;
+          if (!message || message.jsonrpc !== "2.0") return;
+
+          if (message.id && pending.has(message.id)) {
+            const { resolve, reject } = pending.get(message.id);
+            pending.delete(message.id);
+            if (message.error) {
+              reject(new Error(message.error.message || "Tool call failed"));
+              return;
+            }
+            resolve(message);
+            return;
+          }
+
+          if (message.method === "ui/notifications/tool-result") {
+            handleToolResult(message.params);
+          }
+        },
+        { passive: true }
+      );
+
+      render();
+    </script>
+  </body>
+</html>
