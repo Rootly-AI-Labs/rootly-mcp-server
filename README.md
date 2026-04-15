@@ -234,6 +234,36 @@ Add to `claude_desktop_config.json`:
 
 </details>
 
+## ChatGPT App Starter
+
+The server now includes a built-in ChatGPT app surface for incident exploration.
+
+- **Model-visible app tool:** `open_rootly_incident_workbench`
+- **App-only detail tool:** `get_rootly_incident_detail`
+- **UI resource:** `ui://rootly/incident-workbench.html`
+
+This gives ChatGPT a visual Rootly incident workbench without needing a separate backend.
+
+### What it does
+
+- Applies structured incident filters such as team, time range, severity, and status
+- Collects a bounded set of incident summaries for the widget
+- Lets the widget open a detailed incident pane without exposing the detail tool to the model
+
+### Try it in ChatGPT Developer Mode
+
+Once the MCP server is connected in ChatGPT Developer Mode, try prompts like:
+
+- `Open the Rootly incident workbench for Infrastructure incidents from the last 7 days`
+- `Show me resolved critical incidents for Infrastructure from April 1 through April 13`
+- `Open the Rootly incident workbench for database timeout incidents`
+
+### Production auth note
+
+For internal testing and developer-mode setups, the existing bearer-token flow is enough.
+
+For a public ChatGPT app that exposes customer-specific data or write actions, plan to add OAuth 2.1 support on the MCP side before submission. The current Rootly MCP server forwards bearer tokens, but public Apps SDK submissions expect OAuth 2.1-compatible MCP authorization metadata and token verification.
+
 ## Rootly CLI
 
 Standalone CLI for incidents, alerts, services, and on-call operations.
@@ -366,7 +396,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **110 tools**.
+The default server configuration exposes **111 tools**.
 
 ### Custom Agentic Tools
 
@@ -385,6 +415,7 @@ The default server configuration exposes **110 tools**.
 - `list_endpoints`
 - `list_incidents`
 - `list_shifts`
+- `open_rootly_incident_workbench`
 - `search_incidents`
 - `suggest_solutions`
 - `updateIncident` - scoped incident update tool for `summary` and `retrospective_progress_status`

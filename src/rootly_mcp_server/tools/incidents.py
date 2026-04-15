@@ -68,6 +68,141 @@ def _summarize_incident_record(incident: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def resolve_team_names_to_ids(
+    *,
+    teams: str,
+    make_authenticated_request: MakeAuthenticatedRequest,
+) -> tuple[str, dict[str, str]]:
+    """Resolve comma-separated team names/slugs to Rootly team IDs."""
+    requested_teams = _split_csv_values(teams)
+    if not requested_teams:
+        return "", {}
+
+    resolved_team_ids: list[str] = []
+    resolved_team_lookup: dict[str, str] = {}
+    unresolved_teams: list[str] = []
+
+    for team in requested_teams:
+        matched_id = None
+
+        for filter_key, expected_value in (
+            ("filter[slug]", team),
+            ("filter[name]", team),
+        ):
+            response = await make_authenticated_request(
+                "GET",
+                "/v1/teams",
+                params={
+                    "page[size]": 100,
+                    "page[number]": 1,
+                    filter_key: team,
+                },
+            )
+            response.raise_for_status()
+
+            for candidate in response.json().get("data", []):
+                attrs = candidate.get("attributes", {})
+                candidate_value = (
+                    attrs.get("slug")
+                    if filter_key == "filter[slug]"
+                    else attrs.get("name")
+                )
+                if (
+                    isinstance(candidate_value, str)
+                    and candidate_value.lower() == expected_value.lower()
+                ):
+                    matched_id = str(candidate.get("id"))
+                    break
+
+            if matched_id:
+                break
+
+        if matched_id:
+            resolved_team_ids.append(matched_id)
+            resolved_team_lookup[team] = matched_id
+        else:
+            unresolved_teams.append(team)
+
+    if unresolved_teams:
+        raise ValueError(
+            "Could not resolve team names/slugs to team IDs: " + ", ".join(unresolved_teams)
+        )
+
+    return ",".join(dict.fromkeys(resolved_team_ids)), resolved_team_lookup
+
+
+async def prepare_incident_query_context(
+    *,
+    make_authenticated_request: MakeAuthenticatedRequest,
+    query: str,
+    teams: str,
+    team_ids: str,
+    service_ids: str,
+    severity: str,
+    status: str,
+    started_after: str,
+    started_before: str,
+    custom_field_selected_option_ids: str,
+    sort: Literal["created_at", "-created_at", "updated_at", "-updated_at"],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Build shared incident query params and filter metadata for list/collect tools."""
+    resolved_team_lookup: dict[str, str] = {}
+    resolved_team_ids = team_ids
+
+    if teams:
+        resolved_teams_value, resolved_team_lookup = await resolve_team_names_to_ids(
+            teams=teams,
+            make_authenticated_request=make_authenticated_request,
+        )
+        if resolved_team_ids and resolved_teams_value:
+            combined_team_ids = _split_csv_values(resolved_team_ids) + _split_csv_values(
+                resolved_teams_value
+            )
+            resolved_team_ids = ",".join(dict.fromkeys(combined_team_ids))
+        elif resolved_teams_value:
+            resolved_team_ids = resolved_teams_value
+
+    params: dict[str, Any] = {
+        "fields[incidents]": INCIDENT_LIST_FIELDS,
+        "include": "",
+        "sort": sort,
+    }
+
+    if query:
+        params["filter[search]"] = query
+    if resolved_team_ids:
+        params["filter[team_ids]"] = resolved_team_ids
+    if service_ids:
+        params["filter[service_ids]"] = service_ids
+    if severity:
+        params["filter[severity]"] = severity
+    if status:
+        params["filter[status]"] = status
+    if started_after:
+        params["filter[started_at][gte]"] = started_after
+    if started_before:
+        params["filter[started_at][lte]"] = started_before
+    if custom_field_selected_option_ids:
+        params["filter[custom_field_selected_option_ids]"] = custom_field_selected_option_ids
+
+    filters = {
+        "query": query,
+        "teams": teams,
+        "team_ids": team_ids,
+        "resolved_team_ids": resolved_team_ids,
+        "resolved_team_lookup": resolved_team_lookup,
+        "service_ids": service_ids,
+        "severity": severity,
+        "status": status,
+        "started_after": started_after,
+        "started_before": started_before,
+        "custom_field_selected_option_ids": custom_field_selected_option_ids,
+        "sort": sort,
+    }
+
+    return params, filters
+
+
 def register_incident_tools(
     mcp: Any,
     make_authenticated_request: MakeAuthenticatedRequest,
@@ -80,127 +215,6 @@ def register_incident_tools(
     # Initialize smart analysis tools
     similarity_analyzer = TextSimilarityAnalyzer()
     solution_extractor = SolutionExtractor()
-
-    async def _resolve_team_names_to_ids(teams: str) -> tuple[str, dict[str, str]]:
-        """Resolve comma-separated team names/slugs to Rootly team IDs."""
-        requested_teams = _split_csv_values(teams)
-        if not requested_teams:
-            return "", {}
-
-        resolved_team_ids: list[str] = []
-        resolved_team_lookup: dict[str, str] = {}
-        unresolved_teams: list[str] = []
-
-        for team in requested_teams:
-            matched_id = None
-
-            for filter_key, expected_value in (
-                ("filter[slug]", team),
-                ("filter[name]", team),
-            ):
-                response = await make_authenticated_request(
-                    "GET",
-                    "/v1/teams",
-                    params={
-                        "page[size]": 100,
-                        "page[number]": 1,
-                        filter_key: team,
-                    },
-                )
-                response.raise_for_status()
-
-                for candidate in response.json().get("data", []):
-                    attrs = candidate.get("attributes", {})
-                    candidate_value = attrs.get("slug") if filter_key == "filter[slug]" else attrs.get(
-                        "name"
-                    )
-                    if isinstance(candidate_value, str) and candidate_value.lower() == expected_value.lower():
-                        matched_id = str(candidate.get("id"))
-                        break
-
-                if matched_id:
-                    break
-
-            if matched_id:
-                resolved_team_ids.append(matched_id)
-                resolved_team_lookup[team] = matched_id
-            else:
-                unresolved_teams.append(team)
-
-        if unresolved_teams:
-            raise ValueError(
-                "Could not resolve team names/slugs to team IDs: "
-                + ", ".join(unresolved_teams)
-            )
-
-        return ",".join(dict.fromkeys(resolved_team_ids)), resolved_team_lookup
-
-    async def _prepare_incident_query_context(
-        *,
-        query: str,
-        teams: str,
-        team_ids: str,
-        service_ids: str,
-        severity: str,
-        status: str,
-        started_after: str,
-        started_before: str,
-        custom_field_selected_option_ids: str,
-        sort: Literal["created_at", "-created_at", "updated_at", "-updated_at"],
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Build shared incident query params and filter metadata for list/collect tools."""
-        resolved_team_lookup: dict[str, str] = {}
-        resolved_team_ids = team_ids
-
-        if teams:
-            resolved_teams_value, resolved_team_lookup = await _resolve_team_names_to_ids(teams)
-            if resolved_team_ids and resolved_teams_value:
-                combined_team_ids = _split_csv_values(resolved_team_ids) + _split_csv_values(
-                    resolved_teams_value
-                )
-                resolved_team_ids = ",".join(dict.fromkeys(combined_team_ids))
-            elif resolved_teams_value:
-                resolved_team_ids = resolved_teams_value
-
-        params: dict[str, Any] = {
-            "fields[incidents]": INCIDENT_LIST_FIELDS,
-            "include": "",
-            "sort": sort,
-        }
-
-        if query:
-            params["filter[search]"] = query
-        if resolved_team_ids:
-            params["filter[team_ids]"] = resolved_team_ids
-        if service_ids:
-            params["filter[service_ids]"] = service_ids
-        if severity:
-            params["filter[severity]"] = severity
-        if status:
-            params["filter[status]"] = status
-        if started_after:
-            params["filter[started_at][gte]"] = started_after
-        if started_before:
-            params["filter[started_at][lte]"] = started_before
-        if custom_field_selected_option_ids:
-            params["filter[custom_field_selected_option_ids]"] = custom_field_selected_option_ids
-
-        filters = {
-            "query": query,
-            "teams": teams,
-            "team_ids": team_ids,
-            "resolved_team_ids": resolved_team_ids,
-            "resolved_team_lookup": resolved_team_lookup,
-            "service_ids": service_ids,
-            "severity": severity,
-            "status": status,
-            "started_after": started_after,
-            "started_before": started_before,
-            "custom_field_selected_option_ids": custom_field_selected_option_ids,
-            "sort": sort,
-        }
-
-        return params, filters
 
     @mcp.tool()
     async def list_incidents(
@@ -280,7 +294,8 @@ def register_incident_tools(
         Prefer search_incidents only for lightweight free-text lookups.
         """
         try:
-            params, filters = await _prepare_incident_query_context(
+            params, filters = await prepare_incident_query_context(
+                make_authenticated_request=make_authenticated_request,
                 query=query,
                 teams=teams,
                 team_ids=team_ids,
@@ -414,7 +429,8 @@ def register_incident_tools(
         tool call, while keeping payload size under control.
         """
         try:
-            params, filters = await _prepare_incident_query_context(
+            params, filters = await prepare_incident_query_context(
+                make_authenticated_request=make_authenticated_request,
                 query=query,
                 teams=teams,
                 team_ids=team_ids,
