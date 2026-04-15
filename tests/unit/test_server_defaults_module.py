@@ -11,6 +11,8 @@ class TestServerDefaultsModule:
         assert "/incidents/{incident_id}/alerts" in DEFAULT_ALLOWED_PATHS
         assert "/incidents/{incident_id}/form_field_selections" in DEFAULT_ALLOWED_PATHS
         assert "/incident_form_field_selections/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/workflows/{workflow_id}/workflow_tasks" in DEFAULT_ALLOWED_PATHS
+        assert "/workflow_tasks/{id}" in DEFAULT_ALLOWED_PATHS
         assert "/shifts" in DEFAULT_ALLOWED_PATHS
         assert "/on_call_roles" in DEFAULT_ALLOWED_PATHS
 

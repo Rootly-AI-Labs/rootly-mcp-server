@@ -4,7 +4,6 @@
 [![PyPI version](https://badge.fury.io/py/rootly-mcp-server.svg)](https://pypi.org/project/rootly-mcp-server/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/rootly-mcp-server)](https://pypi.org/project/rootly-mcp-server/)
 [![Python Version](https://img.shields.io/pypi/pyversions/rootly-mcp-server.svg)](https://pypi.org/project/rootly-mcp-server/)
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=rootly&config=eyJ1cmwiOiJodHRwczovL21jcC5yb290bHkuY29tL21jcCIsImhlYWRlcnMiOnsiQXV0aG9yaXphdGlvbiI6IkJlYXJlciA8WU9VUl9ST09UTFlfQVBJX1RPS0VOPiJ9fQo=)
 
 An MCP server for the [Rootly API](https://docs.rootly.com/api-reference/overview) for Cursor, Windsurf, Claude, and other MCP clients.
 
@@ -397,7 +396,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **106 tools**.
+The default server configuration exposes **110 tools**.
 
 ### Custom Agentic Tools
 
@@ -446,6 +445,7 @@ createService
 createSeverity
 createTeam
 createWorkflow
+createWorkflowTask
 deleteEscalationLevel
 deleteEscalationPath
 deleteEscalationPolicy
@@ -471,6 +471,7 @@ getSeverity
 getTeam
 getUser
 getWorkflow
+getWorkflowTask
 listAlerts
 listEnvironments
 listEscalationLevels
@@ -495,6 +496,7 @@ listShifts
 listTeams
 listUsers
 listWorkflows
+listWorkflowTasks
 updateAlert
 updateEnvironment
 updateEscalationLevel
@@ -513,6 +515,7 @@ updateSeverity
 updateTeam
 updateUser
 updateWorkflow
+updateWorkflowTask
 ```
 
 Delete operations are intentionally scoped to screenshot coverage paths:
