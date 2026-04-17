@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 
 def _generate_recommendation(solution_data: dict) -> str:
     """Generate a high-level recommendation based on solution analysis."""
@@ -39,6 +41,14 @@ def _generate_recommendation(solution_data: dict) -> str:
         if recommendation_parts
         else "Review similar incidents above for resolution guidance."
     )
+
+
+def write_tools_enabled_from_env(default: bool = False) -> bool:
+    """Return whether non-destructive write tools should be exposed."""
+    raw = os.getenv("ROOTLY_MCP_ENABLE_WRITE_TOOLS")
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
 # Default allowed API paths
@@ -107,6 +117,17 @@ DEFAULT_ALLOWED_PATHS = [
     "/on_call_shadows/{on_call_shadow_id}",
     "/on_call_roles",
     "/on_call_roles/{on_call_role_id}",
+]
+
+# Non-destructive write operations are only exposed for these path families when
+# write tools are explicitly enabled. This keeps the default surface focused on
+# read-only workflows and avoids exposing broader admin/config writes.
+DEFAULT_WRITE_ALLOWED_PATHS = [
+    "/incidents/{incident_id}/action_items",
+    "/incidents/{incident_id}/form_field_selections",
+    "/incident_form_field_selections/{id}",
+    "/workflows/{workflow_id}/workflow_tasks",
+    "/workflow_tasks/{id}",
 ]
 
 # DELETE operations are only exposed for these high-priority screenshot families.
