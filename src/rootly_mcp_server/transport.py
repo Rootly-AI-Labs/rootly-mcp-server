@@ -49,7 +49,7 @@ def _sanitize_log_excerpt(value: Any, max_length: int = _MAX_LOG_EXCERPT_CHARS) 
 
     text = str(value).replace("\r\n", "\n").strip()
     text = re.sub(r"/[\w/.-]+\.py", "[file]", text)
-    text = re.sub(r'C:\\[\w\\.-]+\.py', "[file]", text)
+    text = re.sub(r"C:\\[\w\\.-]+\.py", "[file]", text)
     text = re.sub(r'File "[^"]+"', 'File "[file]"', text)
     text = re.sub(r"Bearer\s+[A-Za-z0-9._~\-]+", "Bearer ***REDACTED***", text, flags=re.I)
     text = re.sub(r"\brootly_[A-Za-z0-9]+\b", "rootly_***REDACTED***", text)
@@ -73,7 +73,7 @@ def _sanitize_error_context_value(value: Any) -> Any:
                 normalized = _sanitize_error_context_value(parsed)
                 if isinstance(normalized, dict | list):
                     return json.dumps(normalized, separators=(",", ":"))
-            except Exception:
+            except Exception:  # nosec B110 - Safe fallback for malformed JSON in log sanitization
                 pass
         return _sanitize_log_excerpt(value)
 
@@ -260,9 +260,7 @@ class AuthCaptureMiddleware:
         self.app = app
         self._sse_path = _normalize_path(os.getenv("FASTMCP_SSE_PATH", "/sse"))
         self._message_path = _normalize_path(os.getenv("FASTMCP_MESSAGE_PATH", "/messages"))
-        self._streamable_path = _normalize_path(
-            os.getenv("FASTMCP_STREAMABLE_HTTP_PATH", "/mcp")
-        )
+        self._streamable_path = _normalize_path(os.getenv("FASTMCP_STREAMABLE_HTTP_PATH", "/mcp"))
         self._code_mode_path = _normalize_path(os.getenv("ROOTLY_CODE_MODE_PATH", "/mcp-codemode"))
         self._capture_paths = {
             self._sse_path,
@@ -509,7 +507,9 @@ def strip_heavy_shift_data(data: dict[str, Any]) -> dict[str, Any]:
             kept_relationships = {}
             for rel_key in ("user", "shift_override"):
                 if rel_key in relationships:
-                    kept_relationships[rel_key] = _collapse_relationship_data(relationships[rel_key])
+                    kept_relationships[rel_key] = _collapse_relationship_data(
+                        relationships[rel_key]
+                    )
             shift["relationships"] = kept_relationships
 
     if isinstance(data["data"], list):
@@ -857,9 +857,7 @@ class AuthenticatedHTTPXClient:
             _record_upstream_response_context(request.method, response)
 
         response = self._maybe_strip_alert_response(request.method, str(request.url), response)
-        response = self._maybe_strip_collection_response(
-            request.method, str(request.url), response
-        )
+        response = self._maybe_strip_collection_response(request.method, str(request.url), response)
         return response
 
     async def __aenter__(self):

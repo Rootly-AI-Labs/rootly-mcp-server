@@ -1,0 +1,109 @@
+{
+  "benchmark_session": {
+    "session_id": "precise_benchmark_2026_03_18",
+    "start_timestamp": "2026-03-18T11:15:00Z",
+    "test_scenarios": [
+      {
+        "id": "simple_user_query",
+        "description": "Get current user - baseline simple query"
+      },
+      {
+        "id": "simple_incident_query",
+        "description": "Get latest incident - single entity retrieval"
+      },
+      {
+        "id": "simple_list_services",
+        "description": "List 5 services - pagination test"
+      },
+      {
+        "id": "simple_list_teams",
+        "description": "List 5 teams - pagination test"
+      },
+      {
+        "id": "complex_incident_analysis",
+        "description": "Multi-API incident root cause analysis workflow"
+      },
+      {
+        "id": "complex_service_dependencies",
+        "description": "Service health analysis with dependency mapping"
+      },
+      {
+        "id": "complex_team_workload",
+        "description": "Team capacity analysis with incident correlation"
+      }
+    ],
+    "transports": ["codemode", "http", "sse"],
+    "measurements": [
+      {
+        "test_id": "simple_user_query",
+        "transport": "codemode",
+        "chars": 1150,
+        "tokens": 341,
+        "cost_usd": 0.005115,
+        "api_calls": 1
+      },
+      {
+        "test_id": "simple_incident_query",
+        "transport": "codemode",
+        "chars": 4555,
+        "tokens": 1319,
+        "cost_usd": 0.019785,
+        "api_calls": 1
+      },
+      {
+        "test_id": "simple_list_services",
+        "transport": "codemode",
+        "chars": 3664,
+        "tokens": 1067,
+        "cost_usd": 0.016005,
+        "api_calls": 1,
+        "pagination_fixed": true
+      },
+      {
+        "test_id": "simple_list_teams",
+        "transport": "codemode",
+        "chars": 5461,
+        "tokens": 1579,
+        "cost_usd": 0.023685,
+        "api_calls": 1,
+        "pagination_fixed": true
+      },
+      {
+        "test_id": "complex_incident_analysis",
+        "transport": "codemode",
+        "raw_chars": 10569,
+        "final_chars": 514,
+        "compression": "95.1%",
+        "tokens": 232,
+        "tokens_saved": 2873,
+        "cost_usd": 0.00348,
+        "cost_saved": 0.043095,
+        "api_calls": 4
+      },
+      {
+        "test_id": "complex_service_dependencies",
+        "transport": "codemode",
+        "raw_chars": 13961,
+        "final_chars": 919,
+        "compression": "93.4%",
+        "tokens": 358,
+        "tokens_saved": 3726,
+        "cost_usd": 0.00537,
+        "cost_saved": 0.0559,
+        "api_calls": 4
+      },
+      {
+        "test_id": "complex_team_workload",
+        "transport": "codemode",
+        "raw_chars": 32986,
+        "final_chars": 1169,
+        "compression": "96.5%",
+        "tokens": 444,
+        "tokens_saved": 9091,
+        "cost_usd": 0.00666,
+        "cost_saved": 0.1364,
+        "api_calls": 4
+      }
+    ]
+  }
+}

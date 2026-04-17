@@ -272,9 +272,9 @@ class TestContainerServerEssentials:
                 f"API call failed: {result.get('error')} - this may be expected in test environment"
             )
         else:
-            assert (
-                result.get("status") == "success"
-            ), f"Expected success status, got {result.get('status')}"
+            assert result.get("status") == "success", (
+                f"Expected success status, got {result.get('status')}"
+            )
 
             # Verify data structure matches expected Rootly API format
             if result["data"]:
@@ -399,6 +399,6 @@ class TestRemoteServerEnvironmentSkipping:
         # If we're running remote tests, we should have a token
         if test_environment["has_token"]:
             token = os.getenv("ROOTLY_API_TOKEN")
-            assert token is not None and token.startswith(
-                "rootly_"
-            ), "Token should start with 'rootly_'"
+            assert token is not None and token.startswith("rootly_"), (
+                "Token should start with 'rootly_'"
+            )

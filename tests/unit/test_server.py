@@ -94,9 +94,7 @@ class TestServerCreation:
 
     def test_bundled_swagger_audit_passes(self):
         """Ensure the bundled swagger passes the full schema audit."""
-        swagger_path = os.path.join(
-            os.path.dirname(server_module.__file__), "data", "swagger.json"
-        )
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
         with open(swagger_path, encoding="utf-8") as f:
             spec = json.load(f)
 
@@ -106,15 +104,16 @@ class TestServerCreation:
 
     def test_filtered_bundled_swagger_audit_passes(self):
         """Ensure the shipped MCP-filtered spec passes the full schema audit."""
-        swagger_path = os.path.join(
-            os.path.dirname(server_module.__file__), "data", "swagger.json"
-        )
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
         with open(swagger_path, encoding="utf-8") as f:
             spec = json.load(f)
 
         filtered_spec = _filter_openapi_spec(
             spec,
-            [f"/v1{path}" if not path.startswith("/v1") else path for path in DEFAULT_ALLOWED_PATHS],
+            [
+                f"/v1{path}" if not path.startswith("/v1") else path
+                for path in DEFAULT_ALLOWED_PATHS
+            ],
             delete_allowed_paths=[
                 f"/v1{path}" if not path.startswith("/v1") else path
                 for path in DEFAULT_DELETE_ALLOWED_PATHS
@@ -126,9 +125,7 @@ class TestServerCreation:
 
     def test_create_server_with_bundled_swagger(self):
         """Ensure FastMCP can instantiate from the bundled swagger without schema errors."""
-        swagger_path = os.path.join(
-            os.path.dirname(server_module.__file__), "data", "swagger.json"
-        )
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
 
         server = create_rootly_mcp_server(swagger_path=swagger_path, hosted=False)
 
@@ -311,7 +308,9 @@ class TestHostedAuthRequestValidation:
             captured["request"] = kwargs["make_authenticated_request"]
 
         with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
-            with patch("rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools):
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
                 with patch("rootly_mcp_server.server.register_incident_tools"):
                     with patch("rootly_mcp_server.server.register_oncall_tools"):
                         with patch("rootly_mcp_server.server.register_resource_handlers"):
@@ -349,7 +348,9 @@ class TestHostedAuthRequestValidation:
             captured["request"] = kwargs["make_authenticated_request"]
 
         with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
-            with patch("rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools):
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
                 with patch("rootly_mcp_server.server.register_incident_tools"):
                     with patch("rootly_mcp_server.server.register_oncall_tools"):
                         with patch("rootly_mcp_server.server.register_resource_handlers"):
@@ -374,7 +375,9 @@ class TestHostedAuthRequestValidation:
         assert call_headers["Authorization"] == "Bearer rootly_session_token"
 
     @pytest.mark.asyncio
-    async def test_hosted_request_rejects_malformed_auth_before_upstream_call(self, mock_httpx_client):
+    async def test_hosted_request_rejects_malformed_auth_before_upstream_call(
+        self, mock_httpx_client
+    ):
         mock_httpx_client.request = AsyncMock()
 
         captured: dict[str, Any] = {}
@@ -383,7 +386,9 @@ class TestHostedAuthRequestValidation:
             captured["request"] = kwargs["make_authenticated_request"]
 
         with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
-            with patch("rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools):
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
                 with patch("rootly_mcp_server.server.register_incident_tools"):
                     with patch("rootly_mcp_server.server.register_oncall_tools"):
                         with patch("rootly_mcp_server.server.register_resource_handlers"):
@@ -620,7 +625,11 @@ class TestToolUsageIdentityHelpers:
     def test_extract_structured_tool_error_from_structured_content_error_flag(self):
         result = mt.CallToolResult(
             content=[],
-            structuredContent={"error": True, "message": "Tool failed", "error_type": "client_error"},
+            structuredContent={
+                "error": True,
+                "message": "Tool failed",
+                "error_type": "client_error",
+            },
             isError=False,
         )
 
@@ -656,7 +665,9 @@ class TestToolUsageIdentityHelpers:
         async def call_next(context: Any):
             return result
 
-        with patch.object(server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}):
+        with patch.object(
+            server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}
+        ):
             with patch.object(server_module, "_log_tool_usage_event") as mock_log:
                 returned = await middleware.on_call_tool(cast(Any, context), cast(Any, call_next))
 
@@ -685,7 +696,9 @@ class TestToolUsageIdentityHelpers:
             )
             raise RuntimeError("boom")
 
-        with patch.object(server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}):
+        with patch.object(
+            server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}
+        ):
             with patch.object(server_module, "_log_tool_usage_event") as mock_log:
                 with pytest.raises(RuntimeError):
                     await middleware.on_call_tool(cast(Any, context), cast(Any, call_next))
@@ -1074,12 +1087,16 @@ class TestOpenAPISpecFiltering:
         }
         assert set(filtered_paths["/v1/escalation_policies"]) >= {"get", "post"}
         assert set(filtered_paths["/v1/escalation_policies/{id}"]) >= {"get", "put", "delete"}
-        assert set(filtered_paths["/v1/escalation_policies/{escalation_policy_id}/escalation_paths"]) >= {
+        assert set(
+            filtered_paths["/v1/escalation_policies/{escalation_policy_id}/escalation_paths"]
+        ) >= {
             "get",
             "post",
         }
         assert set(filtered_paths["/v1/escalation_paths/{id}"]) >= {"get", "put", "delete"}
-        assert set(filtered_paths["/v1/escalation_paths/{escalation_policy_path_id}/escalation_levels"]) >= {
+        assert set(
+            filtered_paths["/v1/escalation_paths/{escalation_policy_path_id}/escalation_levels"]
+        ) >= {
             "get",
             "post",
         }

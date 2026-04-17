@@ -74,7 +74,9 @@ def test_create_rootly_codemode_server_adds_code_mode_transform():
         },
     )()
 
-    with patch("rootly_mcp_server.code_mode.create_rootly_mcp_server", return_value=mock_transform_server) as mock_create:
+    with patch(
+        "rootly_mcp_server.code_mode.create_rootly_mcp_server", return_value=mock_transform_server
+    ) as mock_create:
         server = create_rootly_codemode_server(
             swagger_path="swagger.json",
             name="Rootly Code Mode",
@@ -211,7 +213,9 @@ async def test_execute_normalizes_namespaced_discovery_tool_calls():
 
     fake_fastmcp = SimpleNamespace(
         list_tools=AsyncMock(return_value=[]),
-        call_tool=AsyncMock(return_value=SimpleNamespace(structured_content={"ok": True}, content=[])),
+        call_tool=AsyncMock(
+            return_value=SimpleNamespace(structured_content={"ok": True}, content=[])
+        ),
     )
     ctx = SimpleNamespace(fastmcp=fake_fastmcp)
 

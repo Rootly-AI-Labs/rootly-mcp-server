@@ -119,10 +119,13 @@ def register_incident_tools(
 
                 for candidate in response.json().get("data", []):
                     attrs = candidate.get("attributes", {})
-                    candidate_value = attrs.get("slug") if filter_key == "filter[slug]" else attrs.get(
-                        "name"
+                    candidate_value = (
+                        attrs.get("slug") if filter_key == "filter[slug]" else attrs.get("name")
                     )
-                    if isinstance(candidate_value, str) and candidate_value.lower() == expected_value.lower():
+                    if (
+                        isinstance(candidate_value, str)
+                        and candidate_value.lower() == expected_value.lower()
+                    ):
                         matched_id = str(candidate.get("id"))
                         break
 
@@ -137,8 +140,7 @@ def register_incident_tools(
 
         if unresolved_teams:
             raise ValueError(
-                "Could not resolve team names/slugs to team IDs: "
-                + ", ".join(unresolved_teams)
+                "Could not resolve team names/slugs to team IDs: " + ", ".join(unresolved_teams)
             )
 
         return ",".join(dict.fromkeys(resolved_team_ids)), resolved_team_lookup
@@ -214,9 +216,7 @@ def register_incident_tools(
     async def list_incidents(
         query: Annotated[
             str,
-            Field(
-                description="Optional free-text search across incident titles and summaries"
-            ),
+            Field(description="Optional free-text search across incident titles and summaries"),
         ] = "",
         teams: Annotated[
             str,
@@ -238,9 +238,7 @@ def register_incident_tools(
         ] = "",
         severity: Annotated[
             str,
-            Field(
-                description="Optional severity filter (e.g., critical, high, medium, low)"
-            ),
+            Field(description="Optional severity filter (e.g., critical, high, medium, low)"),
         ] = "",
         status: Annotated[
             str,
@@ -250,15 +248,11 @@ def register_incident_tools(
         ] = "",
         started_after: Annotated[
             str,
-            Field(
-                description="Filter incidents that started at or after this ISO 8601 timestamp"
-            ),
+            Field(description="Filter incidents that started at or after this ISO 8601 timestamp"),
         ] = "",
         started_before: Annotated[
             str,
-            Field(
-                description="Filter incidents that started at or before this ISO 8601 timestamp"
-            ),
+            Field(description="Filter incidents that started at or before this ISO 8601 timestamp"),
         ] = "",
         custom_field_selected_option_ids: Annotated[
             str,
@@ -340,9 +334,7 @@ def register_incident_tools(
     async def collect_incidents(
         query: Annotated[
             str,
-            Field(
-                description="Optional free-text search across incident titles and summaries"
-            ),
+            Field(description="Optional free-text search across incident titles and summaries"),
         ] = "",
         teams: Annotated[
             str,
@@ -364,9 +356,7 @@ def register_incident_tools(
         ] = "",
         severity: Annotated[
             str,
-            Field(
-                description="Optional severity filter (e.g., critical, high, medium, low)"
-            ),
+            Field(description="Optional severity filter (e.g., critical, high, medium, low)"),
         ] = "",
         status: Annotated[
             str,
@@ -376,15 +366,11 @@ def register_incident_tools(
         ] = "",
         started_after: Annotated[
             str,
-            Field(
-                description="Filter incidents that started at or after this ISO 8601 timestamp"
-            ),
+            Field(description="Filter incidents that started at or after this ISO 8601 timestamp"),
         ] = "",
         started_before: Annotated[
             str,
-            Field(
-                description="Filter incidents that started at or before this ISO 8601 timestamp"
-            ),
+            Field(description="Filter incidents that started at or before this ISO 8601 timestamp"),
         ] = "",
         custom_field_selected_option_ids: Annotated[
             str,
@@ -452,7 +438,9 @@ def register_incident_tools(
                 page_params["page[size]"] = batch_size
                 page_params["page[number]"] = page_number
 
-                response = await make_authenticated_request("GET", "/v1/incidents", params=page_params)
+                response = await make_authenticated_request(
+                    "GET", "/v1/incidents", params=page_params
+                )
                 response.raise_for_status()
 
                 response_data = strip_heavy_nested_data(response.json())
@@ -483,7 +471,9 @@ def register_incident_tools(
                 results_truncated = True
 
             return {
-                "incidents": [_summarize_incident_record(incident) for incident in collected_incidents],
+                "incidents": [
+                    _summarize_incident_record(incident) for incident in collected_incidents
+                ],
                 "returned_incidents": len(collected_incidents),
                 "collection": {
                     "max_results": max_results,
@@ -861,7 +851,8 @@ def register_incident_tools(
                 return cast(
                     JsonDict,
                     mcp_error.tool_error(
-                    "Must provide either incident_id or incident_description", "validation_error"
+                        "Must provide either incident_id or incident_description",
+                        "validation_error",
                     ),
                 )
 

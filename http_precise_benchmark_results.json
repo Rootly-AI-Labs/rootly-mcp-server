@@ -1,0 +1,77 @@
+{
+  "http_transport_benchmark": {
+    "timestamp": "2026-03-18T11:42:00Z",
+    "simple_queries": [
+      {
+        "test": "get_current_user",
+        "chars": 1150,
+        "tokens": 329,
+        "cost_usd": 0.00494,
+        "compression": "0%",
+        "notes": "Identical to Code Mode"
+      },
+      {
+        "test": "search_incidents",
+        "chars": 4555,
+        "tokens": 1301,
+        "cost_usd": 0.01952,
+        "compression": "0%",
+        "notes": "Identical to Code Mode"
+      },
+      {
+        "test": "list_5_services",
+        "chars": 2700,
+        "tokens": 771,
+        "cost_usd": 0.01157,
+        "compression": "0%",
+        "notes": "MORE EFFICIENT than Code Mode (3,664 chars) - 26% savings"
+      },
+      {
+        "test": "list_5_teams",
+        "chars": 4500,
+        "tokens": 1286,
+        "cost_usd": 0.01929,
+        "compression": "0%",
+        "notes": "MORE EFFICIENT than Code Mode (5,461 chars) - 18% savings"
+      }
+    ],
+    "simple_queries_totals": {
+      "total_chars": 12905,
+      "total_tokens": 3687,
+      "total_cost_usd": 0.05532,
+      "vs_codemode": "9% more efficient on simple queries"
+    },
+    "complex_workflow_attempt": {
+      "test": "incident_root_cause_analysis",
+      "api_calls_required": 3,
+      "total_chars": 6735,
+      "total_tokens": 1924,
+      "total_cost_usd": 0.02886,
+      "compression": "0%",
+      "data_processing": "NONE - raw JSON dumps only",
+      "user_effort": "HIGH - manual correlation required",
+      "vs_codemode": {
+        "codemode_chars": 514,
+        "codemode_tokens": 232,
+        "codemode_cost": 0.00348,
+        "http_disadvantage": "730% more tokens, 730% higher cost, 0% insights"
+      },
+      "workflow_capability": "SEVERELY LIMITED"
+    },
+    "key_findings": {
+      "strengths": [
+        "9% more efficient on simple queries",
+        "Respects pagination perfectly",
+        "Smaller response payloads",
+        "Direct API responses"
+      ],
+      "weaknesses": [
+        "ZERO data processing capability",
+        "No workflow orchestration",
+        "Manual correlation required",
+        "730% higher cost for complex analysis",
+        "No compression or insights"
+      ]
+    }
+  }
+}

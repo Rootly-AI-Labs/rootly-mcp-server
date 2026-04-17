@@ -268,7 +268,9 @@ class TestTransportModule:
         )
 
     def test_authenticated_client_user_agent_contains_mode(self):
-        with patch.object(transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
             local_client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
             hosted_client = transport.AuthenticatedHTTPXClient(hosted=True, transport="sse")
 
@@ -288,7 +290,9 @@ class TestTransportModule:
             content=b'{"error":"backend down","api_token":"secret"}',
         )
 
-        with patch.object(transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
             client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
             client.client.request = AsyncMock(return_value=response)
 
@@ -305,7 +309,9 @@ class TestTransportModule:
 
     @pytest.mark.asyncio
     async def test_authenticated_client_records_upstream_exception_context(self):
-        with patch.object(transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
             client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
             client.client.request = AsyncMock(side_effect=httpx.ReadTimeout("request timed out"))
 
@@ -333,7 +339,9 @@ class TestTransportModule:
             ),
         ]
 
-        with patch.object(transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
             client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
             client.client.request = AsyncMock(side_effect=responses)
 
@@ -399,7 +407,9 @@ class TestTransportModule:
                     },
                     "relationships": {
                         "email_addresses": {"data": [{"id": "e-1"}, {"id": "e-2"}]},
-                        "role": {"data": {"id": "r-1", "type": "roles", "attributes": {"name": "Admin"}}},
+                        "role": {
+                            "data": {"id": "r-1", "type": "roles", "attributes": {"name": "Admin"}}
+                        },
                     },
                 }
             ],
@@ -419,7 +429,9 @@ class TestTransportModule:
         assert attrs["email"] == "spencer@example.com"
         assert "avatar_url" not in attrs
         assert result["data"][0]["relationships"]["email_addresses"] == {"count": 2}
-        assert result["data"][0]["relationships"]["role"] == {"data": {"id": "r-1", "type": "roles"}}
+        assert result["data"][0]["relationships"]["role"] == {
+            "data": {"id": "r-1", "type": "roles"}
+        }
         included_role = result["included"][0]
         assert included_role["attributes"] == {"name": "Admin"}
         assert "relationships" not in included_role
@@ -478,7 +490,9 @@ class TestTransportModule:
                     "relationships": {
                         "user": {"data": {"id": "u-1", "type": "users"}},
                         "shift_override": {"data": None},
-                        "schedule_rotation": {"data": {"id": "rot-1", "type": "schedule_rotations"}},
+                        "schedule_rotation": {
+                            "data": {"id": "rot-1", "type": "schedule_rotations"}
+                        },
                     },
                 }
             ],

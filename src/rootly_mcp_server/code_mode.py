@@ -172,8 +172,7 @@ class CompatibleMontySandboxProvider(MontySandboxProvider):
 
         inputs = inputs or {}
         async_functions = {
-            key: _ensure_async(value)
-            for key, value in (external_functions or {}).items()
+            key: _ensure_async(value) for key, value in (external_functions or {}).items()
         }
 
         monty = self._build_monty_runner(
@@ -219,10 +218,9 @@ class RootlyCodeMode(CodeMode):
             async def call_tool(tool_name: str, params: dict[str, Any]) -> Any:
                 resolved_name = _normalize_execute_tool_name(tool_name)
                 backend_tools = await _get_cached_tools()
-                tool = (
-                    transform._find_tool(resolved_name, transform._build_discovery_tools())
-                    or transform._find_tool(resolved_name, backend_tools)
-                )
+                tool = transform._find_tool(
+                    resolved_name, transform._build_discovery_tools()
+                ) or transform._find_tool(resolved_name, backend_tools)
                 if tool is None:
                     raise NotFoundError(f"Unknown tool: {tool_name}")
 

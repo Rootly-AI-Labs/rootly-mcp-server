@@ -126,9 +126,9 @@ class TestGetOncallShiftMetrics:
                     tool_names.append(str(t))
 
             # Check if our tool is registered
-            assert (
-                "get_oncall_shift_metrics" in tool_names
-            ), "get_oncall_shift_metrics tool not found"
+            assert "get_oncall_shift_metrics" in tool_names, (
+                "get_oncall_shift_metrics tool not found"
+            )
 
     async def test_metrics_grouped_by_user(self, mock_shifts_response):
         """Test metrics calculation grouped by user."""

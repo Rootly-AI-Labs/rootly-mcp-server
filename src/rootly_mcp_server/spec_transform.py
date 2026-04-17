@@ -164,8 +164,7 @@ def _filter_openapi_spec(
         if not allow_delete:
             path_item.pop("delete", None)
         if not any(
-            method.lower() in ["get", "post", "put", "patch", "delete"]
-            for method in path_item
+            method.lower() in ["get", "post", "put", "patch", "delete"] for method in path_item
         ):
             paths_to_remove.append(path)
     for path in paths_to_remove:
