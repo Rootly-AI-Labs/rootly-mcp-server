@@ -1,3 +1,7 @@
+# Benchmark and performance tracking files
+*benchmark*.json
+*_benchmark_*.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -193,5 +197,6 @@ test_output/
 *.md
 !README.md
 !CONTRIBUTING.md
-!CHANGELOG.md.beads/
+!CHANGELOG.md
+.beads/
 .mcp.json

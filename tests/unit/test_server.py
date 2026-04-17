@@ -10,8 +10,11 @@ Tests cover:
 
 import json
 import os
-from unittest.mock import Mock, mock_open, patch
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock, Mock, mock_open, patch
 
+import mcp.types as mt
 import pytest
 
 import rootly_mcp_server.server as server_module
@@ -19,14 +22,19 @@ from rootly_mcp_server.server import (
     DEFAULT_ALLOWED_PATHS,
     DEFAULT_DELETE_ALLOWED_PATHS,
     AuthenticatedHTTPXClient,
+    _auth_header_state,
     _current_tool_identity,
     _extract_client_ip,
     _extract_request_id,
+    _extract_structured_tool_error,
     _filter_openapi_spec,
     _fingerprint_auth_header,
+    _format_traceback_excerpt,
     _load_swagger_spec,
+    _validate_bearer_auth_header,
     create_rootly_mcp_server,
 )
+from rootly_mcp_server.spec_transform import audit_openapi_spec, has_openapi_audit_findings
 
 
 @pytest.mark.unit
@@ -83,6 +91,45 @@ class TestServerCreation:
             server = create_rootly_mcp_server(hosted=True)
 
             assert server is not None
+
+    def test_bundled_swagger_audit_passes(self):
+        """Ensure the bundled swagger passes the full schema audit."""
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
+        with open(swagger_path, encoding="utf-8") as f:
+            spec = json.load(f)
+
+        findings = audit_openapi_spec(spec)
+
+        assert not has_openapi_audit_findings(findings), findings
+
+    def test_filtered_bundled_swagger_audit_passes(self):
+        """Ensure the shipped MCP-filtered spec passes the full schema audit."""
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
+        with open(swagger_path, encoding="utf-8") as f:
+            spec = json.load(f)
+
+        filtered_spec = _filter_openapi_spec(
+            spec,
+            [
+                f"/v1{path}" if not path.startswith("/v1") else path
+                for path in DEFAULT_ALLOWED_PATHS
+            ],
+            delete_allowed_paths=[
+                f"/v1{path}" if not path.startswith("/v1") else path
+                for path in DEFAULT_DELETE_ALLOWED_PATHS
+            ],
+        )
+        findings = audit_openapi_spec(filtered_spec)
+
+        assert not has_openapi_audit_findings(findings), findings
+
+    def test_create_server_with_bundled_swagger(self):
+        """Ensure FastMCP can instantiate from the bundled swagger without schema errors."""
+        swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
+
+        server = create_rootly_mcp_server(swagger_path=swagger_path, hosted=False)
+
+        assert server is not None
 
     def test_create_server_with_custom_paths(self, mock_httpx_client):
         """Test server creation with custom allowed paths."""
@@ -142,6 +189,41 @@ class TestServerCreation:
             create_rootly_mcp_server(swagger_path=swagger_path)
 
             mock_load_spec.assert_called_once_with(swagger_path)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestBundledIncidentFormFieldSelectionTools:
+    """Verify the bundled swagger exposes the intended incident custom field tools."""
+
+    async def test_incident_form_field_selection_tools_are_available(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert "createIncidentActionItem" in tool_names
+        assert "listIncidentActionItems" in tool_names
+
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "listIncidentFormFieldSelections" in tool_names
+        assert "getIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
+
+        assert "deleteIncidentFormFieldSelection" not in tool_names
+
+    async def test_workflow_task_tools_are_available_without_delete(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert "createWorkflowTask" in tool_names
+        assert "listWorkflowTasks" in tool_names
+        assert "getWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+
+        assert "deleteWorkflowTask" not in tool_names
 
 
 @pytest.mark.unit
@@ -208,6 +290,139 @@ class TestAuthenticatedHTTPXClient:
 
 
 @pytest.mark.unit
+class TestHostedAuthRequestValidation:
+    """Test hosted auth validation in the request path."""
+
+    @pytest.mark.asyncio
+    async def test_hosted_request_forwards_valid_bearer_header(self, mock_httpx_client):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.is_error = False
+        mock_response.is_success = True
+        mock_response.text = ""
+        mock_httpx_client.request = AsyncMock(return_value=mock_response)
+
+        captured: dict[str, Any] = {}
+
+        def capture_alert_tools(**kwargs):
+            captured["request"] = kwargs["make_authenticated_request"]
+
+        with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
+                with patch("rootly_mcp_server.server.register_incident_tools"):
+                    with patch("rootly_mcp_server.server.register_oncall_tools"):
+                        with patch("rootly_mcp_server.server.register_resource_handlers"):
+                            mock_load_spec.return_value = {
+                                "openapi": "3.0.0",
+                                "info": {"title": "Test API", "version": "1.0.0"},
+                                "paths": {},
+                                "components": {"schemas": {}},
+                            }
+                            create_rootly_mcp_server(hosted=True)
+
+        request = captured["request"]
+        with patch(
+            "fastmcp.server.dependencies.get_http_headers",
+            return_value={"authorization": "Bearer rootly_valid_token"},
+        ):
+            await request("GET", "/v1/incidents")
+
+        mock_httpx_client.request.assert_awaited_once()
+        call_headers = mock_httpx_client.request.call_args.kwargs["headers"]
+        assert call_headers["Authorization"] == "Bearer rootly_valid_token"
+
+    @pytest.mark.asyncio
+    async def test_hosted_request_uses_session_auth_fallback(self, mock_httpx_client):
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.is_error = False
+        mock_response.is_success = True
+        mock_response.text = ""
+        mock_httpx_client.request = AsyncMock(return_value=mock_response)
+
+        captured: dict[str, Any] = {}
+
+        def capture_alert_tools(**kwargs):
+            captured["request"] = kwargs["make_authenticated_request"]
+
+        with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
+                with patch("rootly_mcp_server.server.register_incident_tools"):
+                    with patch("rootly_mcp_server.server.register_oncall_tools"):
+                        with patch("rootly_mcp_server.server.register_resource_handlers"):
+                            mock_load_spec.return_value = {
+                                "openapi": "3.0.0",
+                                "info": {"title": "Test API", "version": "1.0.0"},
+                                "paths": {},
+                                "components": {"schemas": {}},
+                            }
+                            create_rootly_mcp_server(hosted=True)
+
+        request = captured["request"]
+        token_ctx = server_module._session_auth_token.set("Bearer rootly_session_token")
+        try:
+            with patch("fastmcp.server.dependencies.get_http_headers", return_value={}):
+                await request("GET", "/v1/incidents")
+        finally:
+            server_module._session_auth_token.reset(token_ctx)
+
+        mock_httpx_client.request.assert_awaited_once()
+        call_headers = mock_httpx_client.request.call_args.kwargs["headers"]
+        assert call_headers["Authorization"] == "Bearer rootly_session_token"
+
+    @pytest.mark.asyncio
+    async def test_hosted_request_rejects_malformed_auth_before_upstream_call(
+        self, mock_httpx_client
+    ):
+        mock_httpx_client.request = AsyncMock()
+
+        captured: dict[str, Any] = {}
+
+        def capture_alert_tools(**kwargs):
+            captured["request"] = kwargs["make_authenticated_request"]
+
+        with patch("rootly_mcp_server.server._load_swagger_spec") as mock_load_spec:
+            with patch(
+                "rootly_mcp_server.server.register_alert_tools", side_effect=capture_alert_tools
+            ):
+                with patch("rootly_mcp_server.server.register_incident_tools"):
+                    with patch("rootly_mcp_server.server.register_oncall_tools"):
+                        with patch("rootly_mcp_server.server.register_resource_handlers"):
+                            mock_load_spec.return_value = {
+                                "openapi": "3.0.0",
+                                "info": {"title": "Test API", "version": "1.0.0"},
+                                "paths": {},
+                                "components": {"schemas": {}},
+                            }
+                            create_rootly_mcp_server(hosted=True)
+
+        request = captured["request"]
+        error_ctx = server_module._session_error_context.set({})
+        try:
+            with patch(
+                "fastmcp.server.dependencies.get_http_headers",
+                return_value={"authorization": "rootly_malformed_token"},
+            ):
+                with pytest.raises(
+                    server_module.RootlyAuthenticationError,
+                    match="Invalid Authorization header format",
+                ):
+                    await request("GET", "/v1/incidents")
+                error_context = server_module._session_error_context.get()
+                assert error_context is not None
+                assert error_context["auth_header_state"] == "invalid_format"
+                assert "Invalid Authorization header format" in error_context["error_message"]
+        finally:
+            server_module._session_error_context.reset(error_ctx)
+
+        mock_httpx_client.request.assert_not_awaited()
+
+
+@pytest.mark.unit
 class TestToolUsageIdentityHelpers:
     """Test helper utilities used for tool usage observability."""
 
@@ -232,6 +447,32 @@ class TestToolUsageIdentityHelpers:
         assert len(fingerprint) == 16
         assert "rootly_secret_token" not in fingerprint
 
+    def test_auth_header_state_classifies_common_cases(self):
+        assert _auth_header_state("") == "missing"
+        assert _auth_header_state("rootly_token_only") == "invalid_format"
+        assert _auth_header_state("Bearer   ") == "missing_token"
+        assert _auth_header_state("Bearer rootly_secret_token") == "bearer"
+
+    def test_validate_bearer_auth_header_accepts_valid_bearer_format(self):
+        assert (
+            _validate_bearer_auth_header("Bearer rootly_secret_token")
+            == "Bearer rootly_secret_token"
+        )
+
+    @pytest.mark.parametrize(
+        ("header", "expected_fragment"),
+        [
+            ("", "Missing Authorization header"),
+            ("rootly_secret_token", "Invalid Authorization header format"),
+            ("Bearer   ", "Authorization header is missing a token"),
+        ],
+    )
+    def test_validate_bearer_auth_header_rejects_bad_formats(
+        self, header: str, expected_fragment: str
+    ):
+        with pytest.raises(server_module.RootlyAuthenticationError, match=expected_fragment):
+            _validate_bearer_auth_header(header)
+
     def test_current_tool_identity_uses_session_fallback(self):
         token_ctx = server_module._session_auth_token.set("Bearer rootly_session_token")
         ip_ctx = server_module._session_client_ip.set("192.0.2.8")
@@ -253,10 +494,23 @@ class TestToolUsageIdentityHelpers:
         assert identity["request_id"] == "req-session-1"
         assert identity["transport"] == "sse"
         assert identity["transport_effective"] == "sse"
+        assert identity["auth_header_state"] == "bearer"
+
+    def test_current_tool_identity_reports_invalid_auth_header_shape(self):
+        token_ctx = server_module._session_auth_token.set("rootly_session_token")
+        try:
+            with patch("fastmcp.server.dependencies.get_http_headers", return_value={}):
+                identity = _current_tool_identity()
+        finally:
+            server_module._session_auth_token.reset(token_ctx)
+
+        assert identity["token_fingerprint"] == _fingerprint_auth_header("rootly_session_token")
+        assert identity["auth_header_state"] == "invalid_format"
 
     def test_current_tool_identity_prefers_session_transport_over_runtime(self):
         token_ctx = server_module._session_auth_token.set("Bearer rootly_session_token")
         transport_ctx = server_module._session_transport.set("streamable-http")
+        mode_ctx = server_module._session_mcp_mode.set("code-mode")
         try:
             with patch("fastmcp.server.dependencies.get_http_headers", return_value={}):
                 with patch("fastmcp.server.context._current_transport") as mock_transport:
@@ -265,10 +519,18 @@ class TestToolUsageIdentityHelpers:
         finally:
             server_module._session_auth_token.reset(token_ctx)
             server_module._session_transport.reset(transport_ctx)
+            server_module._session_mcp_mode.reset(mode_ctx)
 
         assert identity["transport_runtime"] == "both"
         assert identity["transport_effective"] == "streamable-http"
         assert identity["transport"] == "streamable-http"
+        assert identity["mcp_mode"] == "code-mode"
+
+    def test_current_tool_identity_defaults_mcp_mode_to_classic(self):
+        with patch("fastmcp.server.dependencies.get_http_headers", return_value={}):
+            identity = _current_tool_identity()
+
+        assert identity["mcp_mode"] == "classic"
 
     def test_log_tool_usage_event_emits_json_line(self):
         with patch.object(server_module, "_configure_tool_usage_json_logger") as mock_configure:
@@ -279,12 +541,14 @@ class TestToolUsageIdentityHelpers:
                     duration_ms=123.456,
                     arg_keys=["page_size", "page_number"],
                     identity={
+                        "auth_header_state": "bearer",
                         "token_fingerprint": "abc123",
                         "client_ip": "203.0.113.10",
                         "request_id": "req-1",
                         "transport": "sse",
                         "transport_effective": "sse",
                         "transport_runtime": "both",
+                        "mcp_mode": "classic",
                     },
                 )
 
@@ -298,6 +562,153 @@ class TestToolUsageIdentityHelpers:
         assert payload["transport"] == "sse"
         assert payload["transport_effective"] == "sse"
         assert payload["transport_runtime"] == "both"
+        assert payload["mcp_mode"] == "classic"
+        assert payload["auth_header_state"] == "bearer"
+
+    def test_log_tool_usage_event_includes_error_context(self):
+        with patch.object(server_module, "_configure_tool_usage_json_logger"):
+            with patch.object(server_module._tool_usage_json_logger, "info") as mock_info:
+                server_module._log_tool_usage_event(
+                    tool_name="listAlerts",
+                    status="error",
+                    duration_ms=42.0,
+                    arg_keys=["page_size"],
+                    identity={
+                        "token_fingerprint": "abc123",
+                        "client_ip": "203.0.113.10",
+                        "request_id": "req-1",
+                        "transport": "sse",
+                        "transport_effective": "sse",
+                        "transport_runtime": "both",
+                        "mcp_mode": "classic",
+                    },
+                    error_type="ToolError",
+                    error_context={
+                        "error_message": "boom",
+                        "upstream_status": 502,
+                        "traceback_excerpt": "Traceback... trimmed",
+                    },
+                )
+
+        payload = json.loads(mock_info.call_args[0][0])
+        assert payload["error_message"] == "boom"
+        assert payload["upstream_status"] == 502
+        assert payload["traceback_excerpt"] == "Traceback... trimmed"
+
+    def test_extract_structured_tool_error_from_call_tool_result(self):
+        result = mt.CallToolResult(
+            content=[],
+            structuredContent={
+                "error": True,
+                "error_type": "validation_error",
+                "message": "Bad input at /Users/spencercheng/file.py",
+                "details": {
+                    "status_code": 422,
+                    "exception_type": "ValidationError",
+                    "traceback": 'Traceback (most recent call last):\n  File "/tmp/app.py", line 1',
+                    "api_token": "secret-token",
+                },
+            },
+            isError=True,
+        )
+
+        error_context = _extract_structured_tool_error(result)
+
+        assert error_context["error_type"] == "validation_error"
+        assert error_context["error_message"].startswith("Bad input")
+        assert "[file]" in error_context["error_message"]
+        assert error_context["upstream_status"] == 422
+        assert error_context["exception_type"] == "ValidationError"
+        assert "[file]" in error_context["traceback_excerpt"]
+        assert error_context["error_details"]["api_token"] == "***REDACTED***"
+
+    def test_extract_structured_tool_error_from_structured_content_error_flag(self):
+        result = mt.CallToolResult(
+            content=[],
+            structuredContent={
+                "error": True,
+                "message": "Tool failed",
+                "error_type": "client_error",
+            },
+            isError=False,
+        )
+
+        error_context = _extract_structured_tool_error(result)
+
+        assert error_context["error_type"] == "client_error"
+        assert error_context["error_message"] == "Tool failed"
+
+    def test_format_traceback_excerpt_sanitizes_paths(self):
+        excerpt = _format_traceback_excerpt(
+            'Traceback (most recent call last):\n  File "/Users/spencercheng/app.py", line 10, in test'
+        )
+        assert "[file]" in excerpt
+        assert "/Users/spencercheng" not in excerpt
+
+    @pytest.mark.asyncio
+    async def test_tool_usage_middleware_logs_returned_tool_errors(self):
+        middleware = server_module.ToolUsageLoggingMiddleware()
+        context = SimpleNamespace(
+            message=SimpleNamespace(name="listAlerts", arguments={"page_size": 10})
+        )
+        result = mt.CallToolResult(
+            content=[],
+            structuredContent={
+                "error": True,
+                "error_type": "execution_error",
+                "message": "Failed to fetch alerts",
+                "details": {"status_code": 502, "exception_type": "HTTPStatusError"},
+            },
+            isError=True,
+        )
+
+        async def call_next(context: Any):
+            return result
+
+        with patch.object(
+            server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}
+        ):
+            with patch.object(server_module, "_log_tool_usage_event") as mock_log:
+                returned = await middleware.on_call_tool(cast(Any, context), cast(Any, call_next))
+
+        assert returned is result
+        mock_log.assert_called_once()
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["status"] == "error"
+        assert kwargs["error_type"] == "execution_error"
+        assert kwargs["error_context"]["upstream_status"] == 502
+        assert kwargs["error_context"]["exception_type"] == "HTTPStatusError"
+
+    @pytest.mark.asyncio
+    async def test_tool_usage_middleware_logs_exception_context(self):
+        middleware = server_module.ToolUsageLoggingMiddleware()
+        context = SimpleNamespace(
+            message=SimpleNamespace(name="listTeams", arguments={"page_size": 10})
+        )
+
+        async def call_next(context: Any):
+            server_module._session_error_context.set(
+                {
+                    "upstream_status": 503,
+                    "upstream_url": "https://api.rootly.com/v1/teams",
+                    "upstream_response_excerpt": "service unavailable",
+                }
+            )
+            raise RuntimeError("boom")
+
+        with patch.object(
+            server_module, "_current_tool_identity", return_value={"mcp_mode": "classic"}
+        ):
+            with patch.object(server_module, "_log_tool_usage_event") as mock_log:
+                with pytest.raises(RuntimeError):
+                    await middleware.on_call_tool(cast(Any, context), cast(Any, call_next))
+
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["status"] == "error"
+        assert kwargs["error_type"] == "RuntimeError"
+        assert kwargs["error_context"]["exception_type"] == "RuntimeError"
+        assert kwargs["error_context"]["upstream_status"] == 503
+        assert kwargs["error_context"]["upstream_url"] == "https://api.rootly.com/v1/teams"
 
 
 @pytest.mark.unit
@@ -676,12 +1087,16 @@ class TestOpenAPISpecFiltering:
         }
         assert set(filtered_paths["/v1/escalation_policies"]) >= {"get", "post"}
         assert set(filtered_paths["/v1/escalation_policies/{id}"]) >= {"get", "put", "delete"}
-        assert set(filtered_paths["/v1/escalation_policies/{escalation_policy_id}/escalation_paths"]) >= {
+        assert set(
+            filtered_paths["/v1/escalation_policies/{escalation_policy_id}/escalation_paths"]
+        ) >= {
             "get",
             "post",
         }
         assert set(filtered_paths["/v1/escalation_paths/{id}"]) >= {"get", "put", "delete"}
-        assert set(filtered_paths["/v1/escalation_paths/{escalation_policy_path_id}/escalation_levels"]) >= {
+        assert set(
+            filtered_paths["/v1/escalation_paths/{escalation_policy_path_id}/escalation_levels"]
+        ) >= {
             "get",
             "post",
         }

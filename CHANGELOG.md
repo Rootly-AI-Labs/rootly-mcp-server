@@ -5,11 +5,253 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.19] - Released 2026-04-17
 
-### Added
-- Gemini CLI extension support via `gemini-extension.json` manifest
-- Gemini CLI installation instructions in README
+### Features
+
+- **Scoped Incident Creation Tool**: Added a custom `createIncident` tool so agents can create incidents directly from MCP without exposing the full raw `/incidents` OpenAPI surface
+
+### Documentation
+
+- **Custom Tool List Updated**: Added `createIncident` to the README custom tool section with its scoped workflow-oriented behavior
+
+## [2.2.18] - Released 2026-04-15
+
+### Features
+
+- **Workflow Task Tools**: Added complete workflow task management tools to enable creation, listing, retrieval, and updating of workflow actions/tasks
+- **Enhanced Workflow Functionality**: Users can now build complete functional workflows instead of just workflow shells
+
+### New Tools
+
+- `createWorkflowTask` - Create new workflow actions (POST `/v1/workflows/{workflow_id}/workflow_tasks`)
+- `listWorkflowTasks` - List all actions in a workflow (GET `/v1/workflows/{workflow_id}/workflow_tasks`)  
+- `getWorkflowTask` - Retrieve specific workflow action details (GET `/v1/workflow_tasks/{id}`)
+- `updateWorkflowTask` - Modify existing workflow actions (PUT `/v1/workflow_tasks/{id}`)
+
+### Documentation
+
+- **Tool Count Updated**: Increased from 105 to 109 tools reflecting new workflow task capabilities
+- **Tool List Updated**: Added workflow task tools to OpenAPI-generated tools section
+- **Badge Cleanup**: Removed broken Cursor install badge
+
+### Security
+
+- **Delete Operations**: `deleteWorkflowTask` remains intentionally excluded following security policy for destructive operations
+
+## [2.2.17] - Released 2026-04-14
+
+### Fixes
+
+- **Critical HTTP Streamable Transport Fix**: Fixed Route configuration where `stateless_http=False` caused `streamable_methods=None`, breaking the `/mcp` endpoint
+- **Transport Reliability**: Always allow POST and DELETE methods for HTTP streamable endpoints, resolving "streamable HTTP not working" reports
+- **Client Configuration**: Added transport flag explanation in README to prevent auto-fallback from HTTP streamable to SSE
+
+### Security
+
+- **Dependency Updates**: Updated `cryptography` from 46.0.6 to 46.0.7 (CVE fix)
+- **Testing Framework**: Updated `pytest` from 8.0.0 to 9.0.3 (CVE fix)
+- **Vulnerability Resolution**: Addressed 2 medium severity Dependabot alerts
+
+### Documentation
+
+- **Transport Recommendations**: Restored Streamable HTTP as recommended transport (now that it's fixed)
+- **Configuration Examples**: Fixed Claude Code transport option from `http-only` to `http`
+- **User Guidance**: Added explanatory notes for forcing HTTP streamable transport in clients
+
+## [2.2.16] - Released 2026-04-13
+
+### Enhanced
+
+- **Improved parameter naming in `list_incidents`**: Renamed `start_time`/`end_time` to `started_after`/`started_before` for clarity
+- **Enhanced team resolution logic**: Better handling of team name variations and edge cases
+- **Better parameter descriptions**: More accurate and unambiguous field descriptions
+
+### Fixes
+
+- Fixed confusing parameter semantics where `end_time` actually filtered `started_at` field
+- Improved input validation for time-based filtering parameters
+
+## [2.2.15] - Released 2026-04-10
+
+### Highlights
+- Fixed escalation path tool schemas for strict MCP clients and added OpenAPI audit coverage to catch spec regressions earlier
+
+### Fixes
+- Ensured array schemas always include `items` so `createEscalationPath` and `updateEscalationPath` validate correctly
+- Patched the bundled swagger definitions for escalation path urgency rules
+
+### Docs / Dependencies
+- Added local and scheduled remote OpenAPI audit checks
+- Upgraded `requests` to `2.33.1`
+
+## [2.2.14] - Released 2026-04-02
+
+### Highlights
+- Refreshed FastMCP and related runtime dependencies to address newly disclosed security advisories
+
+### Fixes
+- Updated Code Mode imports and test fixtures for FastMCP 3.2.0 compatibility
+
+### Docs / Dependencies
+- Added a Dependabot cooldown for package ecosystem updates
+- Upgraded `fastmcp[code-mode]` to `3.2.0`
+- Upgraded transitive `cryptography` to `46.0.6`
+- Upgraded transitive `Pygments` to `2.20.0`
+
+## [2.2.13] - Released 2026-03-26
+
+### Highlights
+- Improved hosted auth validation and Code Mode `execute` error handling
+- Patched vulnerable `authlib` and `requests` dependencies
+
+### Fixes
+- Validate hosted `Authorization` headers earlier and log auth header state to make malformed token issues easier to diagnose
+- Hardened Code Mode `execute` by normalizing common client-prefixed tool names and returning clearer parser, import, and runtime errors
+
+### Docs / Dependencies
+- Simplified the README quick start and added clearer hosted remote configuration examples for HTTP streamable, SSE, and Code Mode
+- Upgraded `fastmcp[code-mode]` to `3.1.1` and refreshed CI dependencies
+
+## [2.2.12] - Released 2026-03-18
+
+### Highlights
+- Reduced oversized shift and collection payloads and added pagination to `list_shifts`
+
+### Features
+- Added MCP-level pagination to `list_shifts`, including pagination metadata and validation for invalid page numbers
+
+### Fixes
+- Trimmed `get_shift_incidents` results to avoid oversized responses
+- Preserved incidents that started before a shift but were resolved during it
+
+### Docs / Dependencies
+- Slimmed heavy collection payloads for generated tools such as `listUsers`, `listServices`, and `listShifts`
+- Clarified Code Mode tool discovery and pagination guidance for paginated calls
+- Added and simplified Claude Code setup examples in the documentation
+
+## [2.2.11] - Released 2026-03-16
+
+### Highlights
+- Added incident update and readback support for PIR workflows
+
+### Features
+- Added `updateIncident` for scoped incident updates in the PIR lifecycle
+- Added `getIncident` and incident readback support for PIR verification
+
+### Fixes
+- Updated `search_incidents` to include retrospective progress status in readback results
+- Made Code Mode `execute` compatible with older Monty runtimes
+- Patched vulnerable `black` and `PyJWT` dependencies
+- Fixed CI usage of `actions/upload-artifact`
+
+### Docs / Dependencies
+- Scoped GitHub Actions workflow permissions more tightly
+
+## [2.2.10] - Released 2026-03-12
+
+### Highlights
+- Rolled out hosted dual transport, Code Mode, and richer observability support
+
+### Features
+- Added a hosted Code Mode endpoint and enabled Code Mode by default in hosted dual-mode deployments
+- Added streamable HTTP and SSE dual-transport support in a single hosted process
+- Added screenshot coverage, escalation APIs, and tighter allowlist path matching
+- Added structured tool-usage telemetry for Datadog, including transport-aware metrics and hashed identity context
+- Added Gemini CLI extension support and editor-specific setup documentation
+- Added branch-based staging deployment pipeline support
+
+### Fixes
+- Restored legacy server parity while preserving compatibility with FastMCP 3.x `list_tools()` and `send()` behavior
+- Forwarded auth tokens correctly in hosted SSE and streamable HTTP paths
+- Reduced hosted auth noise, improved graceful shutdown behavior, and preserved error context across multi-call tools
+- Fixed non-string incident severity handling in `shift_incidents`
+
+### Docs / Dependencies
+- Reorganized Quick Start documentation by editor and added Rootly CLI guidance
+- Refreshed vulnerable runtime dependencies and normalized log severity handling
+
+## [2.2.9] - Released 2026-02-24
+
+### Fixes
+- Added an auth header event hook for hosted mode so downstream API requests consistently carry the caller's bearer token
+
+## [2.2.8] - Released 2026-02-24
+
+### Features
+- Added filter parameters to `listAlerts`
+- Added transport and hosting mode to the Rootly `User-Agent`
+
+### Docs / Dependencies
+- Hardened the Dockerfile and added `.dockerignore`
+
+## [2.2.6] - Released 2026-02-19
+
+### Highlights
+- Added alert lookup by short ID and reduced alert payload size
+
+### Features
+- Added `get_alert_by_short_id` so alerts can be fetched by short ID or full alert URL
+
+### Fixes
+- Included alert `url` and `created_at` in alert field selection
+- Removed the `timeout` parameter from `FastMCP.from_openapi()` for FastMCP 3.0 compatibility
+
+### Docs / Dependencies
+- Reduced alert API response payload size significantly and added User-Agent tracking
+
+## [2.2.4] - Released 2026-02-18
+
+### Features
+- Added MCP registry metadata
+
+### Fixes
+- Enforced JSON:API headers through an `httpx` event hook to resolve hosted `415` errors more reliably
+
+## [2.2.3] - Released 2026-02-05
+
+### Features
+- Added debug logging for HTTP requests and headers
+
+## [2.2.2] - Released 2026-02-05
+
+### Fixes
+- Removed existing content-type headers case-insensitively before setting JSON:API headers
+
+## [2.2.1] - Released 2026-02-05
+
+### Fixes
+- Always set JSON:API headers regardless of request kwargs to prevent hosted `415` failures
+
+## [2.2.0] - Released 2026-02-05
+
+### Highlights
+- Renamed On-Call Health terminology from `burnout` to `health risk`
+
+## [2.1.4] - Released 2026-02-05
+
+### Fixes
+- Resolved hosted MCP `415 Unsupported Media Type` errors
+
+## [2.1.3] - Released 2026-02-05
+
+### Highlights
+- Added the first On-Call Health integration
+
+### Features
+- Added the On-Call Health integration for burnout-risk detection
+- Added unit tests for the On-Call Health integration
+
+### Fixes
+- Added proper type hints to `och_client.py`
+
+### Docs / Dependencies
+- Streamlined the README and moved development setup details into `CONTRIBUTING.md`
+
+## [2.1.2] - Released 2026-02-05
+
+### Features
+- Added on-call AI workflow tools
 
 ## [2.1.1] - 2026-02-04
 

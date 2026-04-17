@@ -50,9 +50,7 @@ def normalize_transport(value: str) -> TransportName:
     return mapped
 
 
-def normalize_transport_or_default(
-    value: str, default: TransportName = "stdio"
-) -> TransportName:
+def normalize_transport_or_default(value: str, default: TransportName = "stdio") -> TransportName:
     """Normalize transport value, falling back to default when invalid."""
     try:
         return normalize_transport(value)
@@ -203,8 +201,10 @@ def get_server():
     )
 
 
-# Create the server instance for FastMCP CLI (follows quickstart pattern)
-mcp = get_server()
+# Create the server instance for FastMCP CLI (follows quickstart pattern).
+# Avoid eager construction when executing `python -m rootly_mcp_server`, because
+# CLI flags like `--hosted` and `--transport` are parsed later in `main()`.
+mcp = get_server() if __name__ != "__main__" else None
 
 
 def run_dual_http_server(
@@ -254,7 +254,8 @@ def run_dual_http_server(
         stateless=stateless_http,
     )
     streamable_http_app = StreamableHTTPASGIApp(session_manager)
-    streamable_methods = ["POST", "DELETE"] if stateless_http else None
+    # Always allow POST for streamable HTTP - stateless mode only affects session persistence
+    streamable_methods = ["POST", "DELETE"]
 
     routes = [
         Route(sse_path, endpoint=sse_endpoint, methods=["GET"]),
@@ -272,7 +273,9 @@ def run_dual_http_server(
             stateless=stateless_http,
         )
         code_mode_http_app = StreamableHTTPASGIApp(code_mode_session_manager)
-        routes.append(Route(code_mode_path, endpoint=code_mode_http_app, methods=streamable_methods))
+        routes.append(
+            Route(code_mode_path, endpoint=code_mode_http_app, methods=streamable_methods)
+        )
 
     routes.extend(server._get_additional_http_routes())  # noqa: SLF001
 
@@ -370,7 +373,11 @@ def main():
         # argparse already normalizes/validates --transport via type=normalize_transport
         normalized_transport = args.transport
         code_mode_enabled = args.enable_code_mode or code_mode_enabled_from_env(default=True)
-        code_mode_path = normalize_code_mode_path(args.code_mode_path) if args.code_mode_path else code_mode_path_from_env()
+        code_mode_path = (
+            normalize_code_mode_path(args.code_mode_path)
+            if args.code_mode_path
+            else code_mode_path_from_env()
+        )
         server = create_rootly_mcp_server(
             swagger_path=args.swagger_path,
             name=args.name,

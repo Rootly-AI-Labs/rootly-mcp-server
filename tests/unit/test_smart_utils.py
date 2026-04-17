@@ -179,7 +179,6 @@ class TestTextSimilarityAnalyzer:
             patch("sklearn.feature_extraction.text.TfidfVectorizer") as mock_vectorizer,
             patch("sklearn.metrics.pairwise.cosine_similarity") as mock_similarity,
         ):
-
             mock_vectorizer_instance = MagicMock()
             mock_vectorizer.return_value = mock_vectorizer_instance
 
