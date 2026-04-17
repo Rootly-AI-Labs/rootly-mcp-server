@@ -5,6 +5,16 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.19] - Released 2026-04-17
+
+### Features
+
+- **Scoped Incident Creation Tool**: Added a custom `createIncident` tool so agents can create incidents directly from MCP without exposing the full raw `/incidents` OpenAPI surface
+
+### Documentation
+
+- **Custom Tool List Updated**: Added `createIncident` to the README custom tool section with its scoped workflow-oriented behavior
+
 ## [2.2.18] - Released 2026-04-15
 
 ### Features
