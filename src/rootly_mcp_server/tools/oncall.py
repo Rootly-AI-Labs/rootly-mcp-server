@@ -36,7 +36,7 @@ def _truncate_text(value: Any, max_length: int = 280) -> str | None:
         return None
 
     if len(value) <= max_length:
-        return value
+        return str(value)
 
     return f"{value[: max_length - 1].rstrip()}…"
 
