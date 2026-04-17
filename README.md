@@ -290,7 +290,8 @@ A **Global API Key** is recommended for organization-wide queries and for action
         "rootly-mcp-server"
       ],
       "env": {
-        "ROOTLY_API_TOKEN": "<YOUR_ROOTLY_API_TOKEN>"
+        "ROOTLY_API_TOKEN": "<YOUR_ROOTLY_API_TOKEN>",
+        "ROOTLY_MCP_ENABLE_WRITE_TOOLS": "true"
       }
     }
   }
@@ -305,12 +306,15 @@ Choose one transport per server process:
 - **SSE** endpoint path: `/sse`
 - **Code Mode (experimental)** endpoint path: `/mcp-codemode` in hosted dual-transport mode
 
+By default, the self-hosted server exposes read tools only. To enable the curated non-destructive write surface, start the server with `--enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=true`.
+
 Example Docker run (Streamable HTTP):
 
 ```bash
 docker run -p 8000:8000 \
   -e ROOTLY_TRANSPORT=streamable-http \
   -e ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+  -e ROOTLY_MCP_ENABLE_WRITE_TOOLS=true \
   rootly-mcp-server
 ```
 

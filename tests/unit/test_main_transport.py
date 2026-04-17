@@ -1,10 +1,11 @@
-"""Tests for CLI transport normalization in __main__."""
+"""Tests for CLI transport normalization and config propagation in __main__."""
 
 import argparse
+from unittest.mock import patch
 
 import pytest
 
-from rootly_mcp_server.__main__ import normalize_transport
+from rootly_mcp_server.__main__ import get_server, normalize_transport
 
 
 @pytest.mark.parametrize(
@@ -29,3 +30,16 @@ def test_normalize_transport_supported_aliases(value: str, expected: str):
 def test_normalize_transport_rejects_invalid_value():
     with pytest.raises(argparse.ArgumentTypeError):
         normalize_transport("invalid-transport")
+
+
+def test_get_server_passes_write_tool_env_flag():
+    with patch.dict(
+        "os.environ",
+        {"ROOTLY_MCP_ENABLE_WRITE_TOOLS": "true"},
+        clear=True,
+    ):
+        with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:
+            get_server()
+
+    assert mock_create.call_args is not None
+    assert mock_create.call_args.kwargs["enable_write_tools"] is True

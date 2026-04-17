@@ -22,6 +22,7 @@ from .code_mode import (
 from .exceptions import RootlyConfigurationError, RootlyMCPError
 from .security import validate_api_token
 from .server import create_rootly_mcp_server, get_hosted_auth_middleware
+from .server_defaults import write_tools_enabled_from_env
 
 TransportName = Literal["stdio", "sse", "streamable-http", "both"]
 TRANSPORT_ALIASES: dict[str, TransportName] = {
@@ -114,6 +115,11 @@ def parse_args():
         help="Expose a separate hosted Code Mode endpoint (HTTP only)",
     )
     parser.add_argument(
+        "--enable-write-tools",
+        action="store_true",
+        help="Expose curated non-destructive write tools in addition to read tools",
+    )
+    parser.add_argument(
         "--code-mode-path",
         type=str,
         help="Hosted path for the Code Mode endpoint. Default: /mcp-codemode",
@@ -183,6 +189,7 @@ def get_server():
     hosted = os.getenv("ROOTLY_HOSTED", "false").lower() in ("true", "1", "yes")
     base_url = os.getenv("ROOTLY_BASE_URL")
     transport = normalize_transport_or_default(os.getenv("ROOTLY_TRANSPORT", "stdio"))
+    enable_write_tools = write_tools_enabled_from_env()
 
     # Parse allowed paths from environment variable
     allowed_paths = None
@@ -198,6 +205,7 @@ def get_server():
         hosted=hosted,
         base_url=base_url,
         transport=transport,
+        enable_write_tools=enable_write_tools,
     )
 
 
@@ -373,6 +381,7 @@ def main():
         # argparse already normalizes/validates --transport via type=normalize_transport
         normalized_transport = args.transport
         code_mode_enabled = args.enable_code_mode or code_mode_enabled_from_env(default=True)
+        enable_write_tools = args.enable_write_tools or write_tools_enabled_from_env()
         code_mode_path = (
             normalize_code_mode_path(args.code_mode_path)
             if args.code_mode_path
@@ -385,6 +394,7 @@ def main():
             hosted=hosted_mode,
             base_url=args.base_url,
             transport=normalized_transport,
+            enable_write_tools=enable_write_tools,
         )
 
         code_mode_server = None
@@ -403,6 +413,7 @@ def main():
                     allowed_paths=allowed_paths,
                     hosted=hosted_mode,
                     base_url=args.base_url,
+                    enable_write_tools=enable_write_tools,
                 )
                 logger.info("Code Mode enabled at path: %s", code_mode_path)
 
