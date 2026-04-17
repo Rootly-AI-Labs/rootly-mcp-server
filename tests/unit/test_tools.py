@@ -143,8 +143,73 @@ class TestScopedIncidentUpdateTool:
     async def test_update_incident_tool_is_registered_with_customer_facing_name(self):
         tools, _ = self._register_tools()
 
+        assert "createIncident" in tools
         assert "updateIncident" in tools
         assert "getIncident" in tools
+
+    @pytest.mark.asyncio
+    async def test_create_incident_sends_only_allowed_fields(self):
+        tools, request = self._register_tools()
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "data": {
+                "id": "inc-123",
+                "type": "incidents",
+                "attributes": {
+                    "title": "Database latency spike",
+                    "summary": "Primary API requests timing out",
+                    "severity_id": "sev-1",
+                    "service_ids": ["svc-1", "svc-2"],
+                    "group_ids": ["team-1", "team-2"],
+                    "environment_ids": ["env-1"],
+                    "incident_type_ids": ["type-1"],
+                },
+            }
+        }
+        request.return_value = response
+
+        result = await tools["createIncident"](
+            title="  Database latency spike  ",
+            summary=" Primary API requests timing out ",
+            severity_id=" sev-1 ",
+            service_ids="svc-1, svc-2",
+            team_ids="team-1, team-2",
+            environment_ids="env-1",
+            incident_type_ids="type-1",
+        )
+
+        request.assert_awaited_once_with(
+            "POST",
+            "/v1/incidents",
+            json={
+                "data": {
+                    "type": "incidents",
+                    "attributes": {
+                        "title": "Database latency spike",
+                        "summary": "Primary API requests timing out",
+                        "severity_id": "sev-1",
+                        "service_ids": ["svc-1", "svc-2"],
+                        "group_ids": ["team-1", "team-2"],
+                        "environment_ids": ["env-1"],
+                        "incident_type_ids": ["type-1"],
+                    },
+                }
+            },
+        )
+        assert result["data"]["id"] == "inc-123"
+        assert result["data"]["attributes"]["title"] == "Database latency spike"
+
+    @pytest.mark.asyncio
+    async def test_create_incident_requires_title_or_summary(self):
+        tools, request = self._register_tools()
+
+        result = await tools["createIncident"](title="   ", summary=None)
+
+        request.assert_not_called()
+        assert result["error"] is True
+        assert result["error_type"] == "validation_error"
+        assert "Must provide at least one of title or summary" in result["message"]
 
     @pytest.mark.asyncio
     async def test_get_incident_fetches_single_incident(self):

@@ -373,6 +373,7 @@ The default server configuration exposes **110 tools**.
 - `check_oncall_health_risk`
 - `check_responder_availability`
 - `collect_incidents`
+- `createIncident` - create a new incident with a scoped set of fields for agent workflows
 - `create_override_recommendation`
 - `find_related_incidents`
 - `getIncident` - retrieve a single incident for direct verification, including PIR-related fields

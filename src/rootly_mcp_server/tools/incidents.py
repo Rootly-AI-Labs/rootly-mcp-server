@@ -29,6 +29,14 @@ def _split_csv_values(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+def _normalize_optional_text(value: str | None) -> str | None:
+    """Normalize optional text inputs by trimming whitespace and empty values."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _extract_incident_severity(severity_value: Any) -> str | None:
     """Normalize severity values from Rootly API responses into a compact string."""
     if severity_value is None:
@@ -637,6 +645,100 @@ def register_incident_tools(
                 JsonDict,
                 mcp_error.tool_error(
                     f"Failed to retrieve incident: {error_message}",
+                    error_type,
+                ),
+            )
+
+    @mcp.tool(name="createIncident")
+    async def create_incident(
+        title: Annotated[
+            str | None,
+            Field(description="Incident title. If omitted, Rootly may autogenerate one."),
+        ] = None,
+        summary: Annotated[
+            str | None,
+            Field(description="Incident summary or short description."),
+        ] = None,
+        severity_id: Annotated[
+            str | None,
+            Field(description="Optional severity ID to attach to the incident."),
+        ] = None,
+        service_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated service IDs to attach to the incident."),
+        ] = None,
+        team_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated team IDs to attach to the incident."),
+        ] = None,
+        environment_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated environment IDs to attach to the incident."),
+        ] = None,
+        incident_type_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated incident type IDs to attach to the incident."),
+        ] = None,
+    ) -> JsonDict:
+        """Create an incident with a scoped set of fields for agent-driven workflows."""
+        normalized_title = _normalize_optional_text(title)
+        normalized_summary = _normalize_optional_text(summary)
+
+        if normalized_title is None and normalized_summary is None:
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    "Must provide at least one of title or summary",
+                    "validation_error",
+                ),
+            )
+
+        attributes: dict[str, Any] = {}
+
+        if normalized_title is not None:
+            attributes["title"] = normalized_title
+        if normalized_summary is not None:
+            attributes["summary"] = normalized_summary
+
+        normalized_severity_id = _normalize_optional_text(severity_id)
+        if normalized_severity_id is not None:
+            attributes["severity_id"] = normalized_severity_id
+
+        csv_attribute_map = (
+            ("service_ids", service_ids),
+            ("group_ids", team_ids),
+            ("environment_ids", environment_ids),
+            ("incident_type_ids", incident_type_ids),
+        )
+        for attribute_name, raw_value in csv_attribute_map:
+            if raw_value is None:
+                continue
+            values = _split_csv_values(raw_value)
+            if values:
+                attributes[attribute_name] = values
+
+        payload = {
+            "data": {
+                "type": "incidents",
+                "attributes": attributes,
+            }
+        }
+
+        try:
+            response = await make_authenticated_request("POST", "/v1/incidents", json=payload)
+            response.raise_for_status()
+
+            response_data = response.json()
+            if isinstance(response_data.get("data"), dict):
+                stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
+                response_data["data"] = stripped["data"][0]
+            return cast(JsonDict, response_data)
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    f"Failed to create incident: {error_message}",
                     error_type,
                 ),
             )
