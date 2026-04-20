@@ -306,6 +306,19 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "updateWorkflowTask" in tool_names
         assert "deleteWorkflowTask" not in tool_names
 
+    async def test_hosted_server_keeps_curated_write_tools_by_default(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=True)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert "createWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+        assert "createIncidentActionItem" in tool_names
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
+        assert "deleteWorkflowTask" not in tool_names
+
 
 @pytest.mark.unit
 class TestAuthenticatedHTTPXClient:

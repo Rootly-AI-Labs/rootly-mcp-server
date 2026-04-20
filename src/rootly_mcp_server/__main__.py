@@ -189,7 +189,7 @@ def get_server():
     hosted = os.getenv("ROOTLY_HOSTED", "false").lower() in ("true", "1", "yes")
     base_url = os.getenv("ROOTLY_BASE_URL")
     transport = normalize_transport_or_default(os.getenv("ROOTLY_TRANSPORT", "stdio"))
-    enable_write_tools = write_tools_enabled_from_env()
+    enable_write_tools = write_tools_enabled_from_env(default=hosted)
 
     # Parse allowed paths from environment variable
     allowed_paths = None
@@ -381,7 +381,9 @@ def main():
         # argparse already normalizes/validates --transport via type=normalize_transport
         normalized_transport = args.transport
         code_mode_enabled = args.enable_code_mode or code_mode_enabled_from_env(default=True)
-        enable_write_tools = args.enable_write_tools or write_tools_enabled_from_env()
+        enable_write_tools = args.enable_write_tools or write_tools_enabled_from_env(
+            default=hosted_mode
+        )
         code_mode_path = (
             normalize_code_mode_path(args.code_mode_path)
             if args.code_mode_path

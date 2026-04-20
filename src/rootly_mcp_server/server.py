@@ -403,7 +403,7 @@ def create_rootly_mcp_server(
     if allowed_paths is None:
         allowed_paths = DEFAULT_ALLOWED_PATHS
     if enable_write_tools is None:
-        enable_write_tools = server_defaults.write_tools_enabled_from_env()
+        enable_write_tools = server_defaults.write_tools_enabled_from_env(default=hosted)
     if delete_allowed_paths is None:
         delete_allowed_paths = []
     if write_allowed_paths is None:

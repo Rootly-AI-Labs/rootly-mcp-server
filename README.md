@@ -308,6 +308,8 @@ Choose one transport per server process:
 
 By default, the self-hosted server exposes read tools only. To enable the curated non-destructive write surface, start the server with `--enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=true`.
 
+Hosted/remote deployments keep the existing write surface by default for backward compatibility.
+
 Example Docker run (Streamable HTTP):
 
 ```bash

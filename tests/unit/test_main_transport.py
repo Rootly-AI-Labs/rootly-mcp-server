@@ -43,3 +43,23 @@ def test_get_server_passes_write_tool_env_flag():
 
     assert mock_create.call_args is not None
     assert mock_create.call_args.kwargs["enable_write_tools"] is True
+
+
+def test_get_server_defaults_self_hosted_to_read_only():
+    with patch.dict("os.environ", {}, clear=True):
+        with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:
+            get_server()
+
+    assert mock_create.call_args is not None
+    assert mock_create.call_args.kwargs["hosted"] is False
+    assert mock_create.call_args.kwargs["enable_write_tools"] is False
+
+
+def test_get_server_keeps_hosted_default_write_surface():
+    with patch.dict("os.environ", {"ROOTLY_HOSTED": "true"}, clear=True):
+        with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:
+            get_server()
+
+    assert mock_create.call_args is not None
+    assert mock_create.call_args.kwargs["hosted"] is True
+    assert mock_create.call_args.kwargs["enable_write_tools"] is True
