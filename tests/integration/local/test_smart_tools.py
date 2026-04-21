@@ -247,9 +247,9 @@ class TestSmartToolsIntegration:
 
             # Check that expected action types are found
             for expected_action in expected_actions:
-                assert any(
-                    expected_action in action.lower() for action in actions
-                ), f"Expected action '{expected_action}' not found in {actions} for text '{resolution_text}'"
+                assert any(expected_action in action.lower() for action in actions), (
+                    f"Expected action '{expected_action}' not found in {actions} for text '{resolution_text}'"
+                )
 
     def test_service_extraction_patterns(self):
         """Test service name extraction patterns."""
@@ -271,9 +271,9 @@ class TestSmartToolsIntegration:
             services = analyzer.extract_services(text)
 
             for expected_service in expected_services:
-                assert (
-                    expected_service in services
-                ), f"Expected service '{expected_service}' not found in {services} for text '{text}'"
+                assert expected_service in services, (
+                    f"Expected service '{expected_service}' not found in {services} for text '{text}'"
+                )
 
     def test_partial_matching_improvements(self):
         """Test partial/fuzzy matching for related but not identical incidents."""
@@ -326,18 +326,18 @@ class TestSmartToolsIntegration:
         if payment_related and auth_related:
             max_payment_score = max(inc.similarity_score for inc in payment_related)
             max_auth_score = max(inc.similarity_score for inc in auth_related)
-            assert (
-                max_payment_score > max_auth_score
-            ), f"Payment similarity ({max_payment_score}) should be higher than auth ({max_auth_score})"
+            assert max_payment_score > max_auth_score, (
+                f"Payment similarity ({max_payment_score}) should be higher than auth ({max_auth_score})"
+            )
 
         # Check that fuzzy keywords are detected
         if payment_related:
             top_match = max(payment_related, key=lambda x: x.similarity_score)
             # Should detect partial matches like "payment~payments" or "timeout~timeouts"
             # Note: This might be 0 if exact matches exist, which is also valid
-            assert (
-                top_match.similarity_score > 0.1
-            ), "Should have reasonable similarity score for payment incidents"
+            assert top_match.similarity_score > 0.1, (
+                "Should have reasonable similarity score for payment incidents"
+            )
 
     def test_find_related_incidents_with_text_description(self):
         """Test find_related_incidents with descriptive text instead of incident ID."""
@@ -413,9 +413,9 @@ class TestSmartToolsIntegration:
 
         # Check that similarity scores are reasonable for text-based matching
         top_match = similar_incidents[0]
-        assert (
-            top_match.similarity_score > 0.1
-        ), "Should have reasonable similarity score for text description"
+        assert top_match.similarity_score > 0.1, (
+            "Should have reasonable similarity score for text description"
+        )
 
         # Verify matched keywords include relevant terms
         all_keywords = []
@@ -472,13 +472,13 @@ class TestSmartToolsIntegration:
         similar_incidents = analyzer.calculate_similarity(mixed_status_incidents, target_incident)
 
         # Should find all payment-related incidents regardless of status
-        assert (
-            len(similar_incidents) == 3
-        ), f"Expected 3 similar incidents, got {len(similar_incidents)}"
+        assert len(similar_incidents) == 3, (
+            f"Expected 3 similar incidents, got {len(similar_incidents)}"
+        )
 
         # All should be payment-related with reasonable similarity scores
         for incident in similar_incidents:
-            assert (
-                incident.similarity_score > 0.1
-            ), f"Low similarity score {incident.similarity_score} for payment incident"
+            assert incident.similarity_score > 0.1, (
+                f"Low similarity score {incident.similarity_score} for payment incident"
+            )
             assert "payment" in incident.title.lower() or "payment" in incident.matched_keywords

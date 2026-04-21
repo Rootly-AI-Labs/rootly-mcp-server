@@ -4,7 +4,6 @@
 [![PyPI version](https://badge.fury.io/py/rootly-mcp-server.svg)](https://pypi.org/project/rootly-mcp-server/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/rootly-mcp-server)](https://pypi.org/project/rootly-mcp-server/)
 [![Python Version](https://img.shields.io/pypi/pyversions/rootly-mcp-server.svg)](https://pypi.org/project/rootly-mcp-server/)
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=rootly&config=eyJ1cmwiOiJodHRwczovL21jcC5yb290bHkuY29tL3NzZSIsImhlYWRlcnMiOnsiQXV0aG9yaXphdGlvbiI6IkJlYXJlciA8WU9VUl9ST09UTFlfQVBJX1RPS0VOPiJ9fQ==)
 
 An MCP server for the [Rootly API](https://docs.rootly.com/api-reference/overview) for Cursor, Windsurf, Claude, and other MCP clients.
 
@@ -17,7 +16,7 @@ Use the hosted MCP server. No local installation required.
 ### Hosted Transport Options
 
 - **Streamable HTTP (recommended):** `https://mcp.rootly.com/mcp`
-- **SSE (fallback):** `https://mcp.rootly.com/sse`
+- **SSE (stable alternative):** `https://mcp.rootly.com/sse`
 - **Code Mode:** `https://mcp.rootly.com/mcp-codemode`
 
 ### General Remote Setup
@@ -37,7 +36,7 @@ Default remote config (HTTP streamable):
 }
 ```
 
-SSE fallback:
+SSE (alternative):
 
 ```json
 {
@@ -88,7 +87,7 @@ claude mcp add rootly-codemode --transport http https://mcp.rootly.com/mcp-codem
   --header "Authorization: Bearer YOUR_ROOTLY_API_TOKEN"
 ```
 
-SSE fallback:
+SSE (alternative):
 
 ```bash
 claude mcp add --transport sse rootly-sse https://mcp.rootly.com/sse \
@@ -103,8 +102,8 @@ Create `.mcp.json` in your project root:
 {
   "mcpServers": {
     "rootly": {
-      "type": "sse",
-      "url": "https://mcp.rootly.com/sse",
+      "type": "http",
+      "url": "https://mcp.rootly.com/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_ROOTLY_API_TOKEN"
       }
@@ -212,6 +211,8 @@ bearer_token_env_var = "ROOTLY_API_TOKEN"
 
 Add to `claude_desktop_config.json`:
 
+> **Note:** The `--transport http` flag ensures HTTP streamable transport is used instead of auto-falling back to SSE.
+
 ```json
 {
   "mcpServers": {
@@ -221,6 +222,8 @@ Add to `claude_desktop_config.json`:
         "-y",
         "mcp-remote",
         "https://mcp.rootly.com/mcp",
+        "--transport",
+        "http",
         "--header",
         "Authorization: Bearer <YOUR_ROOTLY_API_TOKEN>"
       ]
@@ -270,7 +273,7 @@ Choose the token type based on the access you need:
 - **Team API Key**: Access limited to entities owned by that team.
 - **Personal API Key**: Access matches the user who created it.
 
-A **Global API Key** is recommended for tools like `get_oncall_handoff_summary`, `get_oncall_shift_metrics`, and org-wide incident search.
+A **Global API Key** is recommended for organization-wide queries and for actions that modify data, especially when workflows may span multiple teams, schedules, or incidents.
 
 ### With uv
 
@@ -352,7 +355,7 @@ docker run -p 8000:8000 \
 ## Features
 
 - **Dynamic Tool Generation**: Automatically creates MCP resources from Rootly's OpenAPI (Swagger) specification
-- **Smart Pagination**: Defaults to 10 items per request for incident endpoints to prevent context window overflow
+- **Smart Pagination**: Uses bounded pagination and compact incident responses to prevent context window overflow
 - **API Filtering**: Limits exposed API endpoints for security and performance
 - **Intelligent Incident Analysis**: Smart tools that analyze historical incident data
   - **`find_related_incidents`**: Uses TF-IDF similarity analysis to find historically similar incidents
@@ -363,12 +366,14 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **101 tools**.
+The default server configuration exposes **110 tools**.
 
 ### Custom Agentic Tools
 
 - `check_oncall_health_risk`
 - `check_responder_availability`
+- `collect_incidents`
+- `createIncident` - create a new incident with a scoped set of fields for agent workflows
 - `create_override_recommendation`
 - `find_related_incidents`
 - `getIncident` - retrieve a single incident for direct verification, including PIR-related fields
@@ -379,6 +384,7 @@ The default server configuration exposes **101 tools**.
 - `get_server_version`
 - `get_shift_incidents`
 - `list_endpoints`
+- `list_incidents`
 - `list_shifts`
 - `search_incidents`
 - `suggest_solutions`
@@ -396,6 +402,7 @@ createEscalationPath
 createEscalationPolicy
 createFunctionality
 createIncidentActionItem
+createIncidentFormFieldSelection
 createIncidentType
 createOnCallRole
 createOnCallShadow
@@ -408,6 +415,7 @@ createService
 createSeverity
 createTeam
 createWorkflow
+createWorkflowTask
 deleteEscalationLevel
 deleteEscalationPath
 deleteEscalationPolicy
@@ -420,6 +428,7 @@ getEscalationLevel
 getEscalationPath
 getEscalationPolicy
 getFunctionality
+getIncidentFormFieldSelection
 getIncidentType
 getOnCallRole
 getOnCallShadow
@@ -432,6 +441,7 @@ getSeverity
 getTeam
 getUser
 getWorkflow
+getWorkflowTask
 listAlerts
 listEnvironments
 listEscalationLevels
@@ -441,6 +451,7 @@ listEscalationPolicies
 listFunctionalities
 listIncidentActionItems
 listIncidentAlerts
+listIncidentFormFieldSelections
 listIncident_Types
 listOnCallRoles
 listOnCallShadows
@@ -455,12 +466,14 @@ listShifts
 listTeams
 listUsers
 listWorkflows
+listWorkflowTasks
 updateAlert
 updateEnvironment
 updateEscalationLevel
 updateEscalationPath
 updateEscalationPolicy
 updateFunctionality
+updateIncidentFormFieldSelection
 updateIncidentType
 updateOnCallRole
 updateOnCallShadow
@@ -472,6 +485,7 @@ updateSeverity
 updateTeam
 updateUser
 updateWorkflow
+updateWorkflowTask
 ```
 
 Delete operations are intentionally scoped to screenshot coverage paths:
@@ -490,7 +504,7 @@ Set the `ONCALLHEALTH_API_KEY` environment variable:
   "mcpServers": {
     "rootly": {
       "command": "uvx",
-      "args": ["rootly-mcp-server"],
+      "args": ["--from", "rootly-mcp-server", "rootly-mcp-server"],
       "env": {
         "ROOTLY_API_TOKEN": "your_rootly_token",
         "ONCALLHEALTH_API_KEY": "och_live_your_key"

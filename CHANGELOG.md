@@ -5,7 +5,99 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.19] - Released 2026-04-17
+
+### Features
+
+- **Scoped Incident Creation Tool**: Added a custom `createIncident` tool so agents can create incidents directly from MCP without exposing the full raw `/incidents` OpenAPI surface
+
+### Documentation
+
+- **Custom Tool List Updated**: Added `createIncident` to the README custom tool section with its scoped workflow-oriented behavior
+
+## [2.2.18] - Released 2026-04-15
+
+### Features
+
+- **Workflow Task Tools**: Added complete workflow task management tools to enable creation, listing, retrieval, and updating of workflow actions/tasks
+- **Enhanced Workflow Functionality**: Users can now build complete functional workflows instead of just workflow shells
+
+### New Tools
+
+- `createWorkflowTask` - Create new workflow actions (POST `/v1/workflows/{workflow_id}/workflow_tasks`)
+- `listWorkflowTasks` - List all actions in a workflow (GET `/v1/workflows/{workflow_id}/workflow_tasks`)  
+- `getWorkflowTask` - Retrieve specific workflow action details (GET `/v1/workflow_tasks/{id}`)
+- `updateWorkflowTask` - Modify existing workflow actions (PUT `/v1/workflow_tasks/{id}`)
+
+### Documentation
+
+- **Tool Count Updated**: Increased from 105 to 109 tools reflecting new workflow task capabilities
+- **Tool List Updated**: Added workflow task tools to OpenAPI-generated tools section
+- **Badge Cleanup**: Removed broken Cursor install badge
+
+### Security
+
+- **Delete Operations**: `deleteWorkflowTask` remains intentionally excluded following security policy for destructive operations
+
+## [2.2.17] - Released 2026-04-14
+
+### Fixes
+
+- **Critical HTTP Streamable Transport Fix**: Fixed Route configuration where `stateless_http=False` caused `streamable_methods=None`, breaking the `/mcp` endpoint
+- **Transport Reliability**: Always allow POST and DELETE methods for HTTP streamable endpoints, resolving "streamable HTTP not working" reports
+- **Client Configuration**: Added transport flag explanation in README to prevent auto-fallback from HTTP streamable to SSE
+
+### Security
+
+- **Dependency Updates**: Updated `cryptography` from 46.0.6 to 46.0.7 (CVE fix)
+- **Testing Framework**: Updated `pytest` from 8.0.0 to 9.0.3 (CVE fix)
+- **Vulnerability Resolution**: Addressed 2 medium severity Dependabot alerts
+
+### Documentation
+
+- **Transport Recommendations**: Restored Streamable HTTP as recommended transport (now that it's fixed)
+- **Configuration Examples**: Fixed Claude Code transport option from `http-only` to `http`
+- **User Guidance**: Added explanatory notes for forcing HTTP streamable transport in clients
+
+## [2.2.16] - Released 2026-04-13
+
+### Enhanced
+
+- **Improved parameter naming in `list_incidents`**: Renamed `start_time`/`end_time` to `started_after`/`started_before` for clarity
+- **Enhanced team resolution logic**: Better handling of team name variations and edge cases
+- **Better parameter descriptions**: More accurate and unambiguous field descriptions
+
+### Fixes
+
+- Fixed confusing parameter semantics where `end_time` actually filtered `started_at` field
+- Improved input validation for time-based filtering parameters
+
+## [2.2.15] - Released 2026-04-10
+
+### Highlights
+- Fixed escalation path tool schemas for strict MCP clients and added OpenAPI audit coverage to catch spec regressions earlier
+
+### Fixes
+- Ensured array schemas always include `items` so `createEscalationPath` and `updateEscalationPath` validate correctly
+- Patched the bundled swagger definitions for escalation path urgency rules
+
+### Docs / Dependencies
+- Added local and scheduled remote OpenAPI audit checks
+- Upgraded `requests` to `2.33.1`
+
+## [2.2.14] - Released 2026-04-02
+
+### Highlights
+- Refreshed FastMCP and related runtime dependencies to address newly disclosed security advisories
+
+### Fixes
+- Updated Code Mode imports and test fixtures for FastMCP 3.2.0 compatibility
+
+### Docs / Dependencies
+- Added a Dependabot cooldown for package ecosystem updates
+- Upgraded `fastmcp[code-mode]` to `3.2.0`
+- Upgraded transitive `cryptography` to `46.0.6`
+- Upgraded transitive `Pygments` to `2.20.0`
 
 ## [2.2.13] - Released 2026-03-26
 

@@ -36,7 +36,7 @@ def _truncate_text(value: Any, max_length: int = 280) -> str | None:
         return None
 
     if len(value) <= max_length:
-        return value
+        return str(value)
 
     return f"{value[: max_length - 1].rstrip()}…"
 
@@ -100,6 +100,7 @@ def register_oncall_tools(
     mcp_error: MCPErrorLike,
 ) -> None:
     """Register on-call analysis and scheduling tools on the MCP server."""
+
     @mcp.tool()
     async def get_oncall_shift_metrics(
         start_date: Annotated[
@@ -1229,7 +1230,9 @@ def register_oncall_tools(
     _lookup_maps_lock = asyncio.Lock()
 
     # Helper function to fetch users and schedules for enrichment
-    async def _fetch_users_and_schedules_maps() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    async def _fetch_users_and_schedules_maps() -> tuple[
+        dict[str, Any], dict[str, Any], dict[str, Any]
+    ]:
         """Fetch all users, schedules, and teams to build lookup maps.
 
         Results are cached for 5 minutes to avoid repeated API calls.

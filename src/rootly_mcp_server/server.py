@@ -201,16 +201,14 @@ def _log_tool_usage_event(
         event["error_type"] = error_type
     if error_context:
         event.update(
-            {
-                key: value
-                for key, value in error_context.items()
-                if value not in ("", [], None, {})
-            }
+            {key: value for key, value in error_context.items() if value not in ("", [], None, {})}
         )
 
     _configure_tool_usage_json_logger()
     _tool_usage_json_logger.info(
-        json.dumps({k: v for k, v in event.items() if v not in ("", [], None)}, separators=(",", ":"))
+        json.dumps(
+            {k: v for k, v in event.items() if v not in ("", [], None)}, separators=(",", ":")
+        )
     )
 
 
@@ -405,8 +403,7 @@ def create_rootly_mcp_server(
         f"/v1{path}" if not path.startswith("/v1") else path for path in allowed_paths
     ]
     delete_allowed_paths_v1 = [
-        f"/v1{path}" if not path.startswith("/v1") else path
-        for path in delete_allowed_paths
+        f"/v1{path}" if not path.startswith("/v1") else path for path in delete_allowed_paths
     ]
 
     logger.info(f"Creating Rootly MCP Server with allowed paths: {allowed_paths_v1}")
@@ -552,7 +549,9 @@ def create_rootly_mcp_server(
                 logger.debug(
                     f"make_authenticated_request: client_ip={client_ip}, headers_keys={list(request_headers.keys()) if request_headers else []}"
                 )
-                direct_auth_header = request_headers.get("authorization", "") if request_headers else ""
+                direct_auth_header = (
+                    request_headers.get("authorization", "") if request_headers else ""
+                )
                 effective_auth_header = direct_auth_header or _session_auth_token.get("")
                 if direct_auth_header:
                     logger.debug("make_authenticated_request: Found auth header, adding to request")

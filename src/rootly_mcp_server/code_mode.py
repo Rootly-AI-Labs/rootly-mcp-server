@@ -19,7 +19,7 @@ from fastmcp.experimental.transforms.code_mode import (
     _unwrap_tool_result,
 )
 from fastmcp.server.context import Context
-from fastmcp.tools.tool import Tool
+from fastmcp.tools import Tool
 from pydantic import Field
 
 from .server import create_rootly_mcp_server
@@ -172,8 +172,7 @@ class CompatibleMontySandboxProvider(MontySandboxProvider):
 
         inputs = inputs or {}
         async_functions = {
-            key: _ensure_async(value)
-            for key, value in (external_functions or {}).items()
+            key: _ensure_async(value) for key, value in (external_functions or {}).items()
         }
 
         monty = self._build_monty_runner(
@@ -219,10 +218,9 @@ class RootlyCodeMode(CodeMode):
             async def call_tool(tool_name: str, params: dict[str, Any]) -> Any:
                 resolved_name = _normalize_execute_tool_name(tool_name)
                 backend_tools = await _get_cached_tools()
-                tool = (
-                    transform._find_tool(resolved_name, transform._build_discovery_tools())
-                    or transform._find_tool(resolved_name, backend_tools)
-                )
+                tool = transform._find_tool(
+                    resolved_name, transform._build_discovery_tools()
+                ) or transform._find_tool(resolved_name, backend_tools)
                 if tool is None:
                     raise NotFoundError(f"Unknown tool: {tool_name}")
 
@@ -264,7 +262,9 @@ def build_code_mode_transform() -> CodeMode:
             "the schema. For paginated data tools, pass pagination arguments like page_size, "
             "page_number, and max_results exactly as documented by that tool instead of inventing "
             "alternatives like per_page. Prefer Rootly's higher-level custom tools when they fit "
-            "the task, then fall back to lower-level API tools as needed. Do not use client "
+            "the task, then fall back to lower-level API tools as needed. Use list_incidents for "
+            "structured incident queries with filters like teams, team_ids, start_time, end_time, "
+            "severity, or status; use search_incidents for lightweight free-text lookups. Do not use client "
             "prefixes like mcp__rootly-codemode__tool_search or rootly:getCurrentUser inside "
             "execute; call tool_search or the raw Rootly tool name directly. Avoid imports "
             "such as json or asyncio inside the sandbox and return native Python values instead. Example: "

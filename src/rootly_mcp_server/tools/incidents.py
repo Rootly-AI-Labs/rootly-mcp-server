@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import Field
 
@@ -18,6 +18,62 @@ RETROSPECTIVE_PROGRESS_STATUSES = ("not_started", "active", "completed", "skippe
 INCIDENT_SEARCH_FIELDS = (
     "id,title,summary,status,created_at,updated_at,url,started_at,retrospective_progress_status"
 )
+INCIDENT_LIST_FIELDS = (
+    "id,sequential_id,title,summary,status,severity,created_at,updated_at,url,"
+    "started_at,resolved_at,retrospective_progress_status"
+)
+
+
+def _split_csv_values(value: str) -> list[str]:
+    """Split comma-separated values into a normalized list."""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    """Normalize optional text inputs by trimming whitespace and empty values."""
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _extract_incident_severity(severity_value: Any) -> str | None:
+    """Normalize severity values from Rootly API responses into a compact string."""
+    if severity_value is None:
+        return None
+    if isinstance(severity_value, str):
+        return severity_value
+    if isinstance(severity_value, dict):
+        if severity_value.get("slug") or severity_value.get("name"):
+            return cast(str | None, severity_value.get("slug") or severity_value.get("name"))
+        severity_data = severity_value.get("data")
+        if isinstance(severity_data, dict):
+            attributes = severity_data.get("attributes", {})
+            if isinstance(attributes, dict):
+                return cast(str | None, attributes.get("slug") or attributes.get("name"))
+    return None
+
+
+def _summarize_incident_record(incident: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact incident summary suitable for list/query workflows."""
+    attrs = incident.get("attributes", {})
+    sequential_id = attrs.get("sequential_id")
+    incident_number = f"INC-{sequential_id}" if sequential_id is not None else None
+
+    return {
+        "incident_id": incident.get("id"),
+        "incident_number": incident_number,
+        "title": attrs.get("title"),
+        "summary": attrs.get("summary"),
+        "status": attrs.get("status"),
+        "severity": _extract_incident_severity(attrs.get("severity")),
+        "started_at": attrs.get("started_at"),
+        "resolved_at": attrs.get("resolved_at"),
+        "created_at": attrs.get("created_at"),
+        "updated_at": attrs.get("updated_at"),
+        "retrospective_progress_status": attrs.get("retrospective_progress_status"),
+        "url": attrs.get("url"),
+    }
 
 
 def register_incident_tools(
@@ -32,6 +88,405 @@ def register_incident_tools(
     # Initialize smart analysis tools
     similarity_analyzer = TextSimilarityAnalyzer()
     solution_extractor = SolutionExtractor()
+
+    async def _resolve_team_names_to_ids(teams: str) -> tuple[str, dict[str, str]]:
+        """Resolve comma-separated team names/slugs to Rootly team IDs."""
+        requested_teams = _split_csv_values(teams)
+        if not requested_teams:
+            return "", {}
+
+        resolved_team_ids: list[str] = []
+        resolved_team_lookup: dict[str, str] = {}
+        unresolved_teams: list[str] = []
+
+        for team in requested_teams:
+            matched_id = None
+
+            for filter_key, expected_value in (
+                ("filter[slug]", team),
+                ("filter[name]", team),
+            ):
+                response = await make_authenticated_request(
+                    "GET",
+                    "/v1/teams",
+                    params={
+                        "page[size]": 100,
+                        "page[number]": 1,
+                        filter_key: team,
+                    },
+                )
+                response.raise_for_status()
+
+                for candidate in response.json().get("data", []):
+                    attrs = candidate.get("attributes", {})
+                    candidate_value = (
+                        attrs.get("slug") if filter_key == "filter[slug]" else attrs.get("name")
+                    )
+                    if (
+                        isinstance(candidate_value, str)
+                        and candidate_value.lower() == expected_value.lower()
+                    ):
+                        matched_id = str(candidate.get("id"))
+                        break
+
+                if matched_id:
+                    break
+
+            if matched_id:
+                resolved_team_ids.append(matched_id)
+                resolved_team_lookup[team] = matched_id
+            else:
+                unresolved_teams.append(team)
+
+        if unresolved_teams:
+            raise ValueError(
+                "Could not resolve team names/slugs to team IDs: " + ", ".join(unresolved_teams)
+            )
+
+        return ",".join(dict.fromkeys(resolved_team_ids)), resolved_team_lookup
+
+    async def _prepare_incident_query_context(
+        *,
+        query: str,
+        teams: str,
+        team_ids: str,
+        service_ids: str,
+        severity: str,
+        status: str,
+        started_after: str,
+        started_before: str,
+        custom_field_selected_option_ids: str,
+        sort: Literal["created_at", "-created_at", "updated_at", "-updated_at"],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Build shared incident query params and filter metadata for list/collect tools."""
+        resolved_team_lookup: dict[str, str] = {}
+        resolved_team_ids = team_ids
+
+        if teams:
+            resolved_teams_value, resolved_team_lookup = await _resolve_team_names_to_ids(teams)
+            if resolved_team_ids and resolved_teams_value:
+                combined_team_ids = _split_csv_values(resolved_team_ids) + _split_csv_values(
+                    resolved_teams_value
+                )
+                resolved_team_ids = ",".join(dict.fromkeys(combined_team_ids))
+            elif resolved_teams_value:
+                resolved_team_ids = resolved_teams_value
+
+        params: dict[str, Any] = {
+            "fields[incidents]": INCIDENT_LIST_FIELDS,
+            "include": "",
+            "sort": sort,
+        }
+
+        if query:
+            params["filter[search]"] = query
+        if resolved_team_ids:
+            params["filter[team_ids]"] = resolved_team_ids
+        if service_ids:
+            params["filter[service_ids]"] = service_ids
+        if severity:
+            params["filter[severity]"] = severity
+        if status:
+            params["filter[status]"] = status
+        if started_after:
+            params["filter[started_at][gte]"] = started_after
+        if started_before:
+            params["filter[started_at][lte]"] = started_before
+        if custom_field_selected_option_ids:
+            params["filter[custom_field_selected_option_ids]"] = custom_field_selected_option_ids
+
+        filters = {
+            "query": query,
+            "teams": teams,
+            "team_ids": team_ids,
+            "resolved_team_ids": resolved_team_ids,
+            "resolved_team_lookup": resolved_team_lookup,
+            "service_ids": service_ids,
+            "severity": severity,
+            "status": status,
+            "started_after": started_after,
+            "started_before": started_before,
+            "custom_field_selected_option_ids": custom_field_selected_option_ids,
+            "sort": sort,
+        }
+
+        return params, filters
+
+    @mcp.tool()
+    async def list_incidents(
+        query: Annotated[
+            str,
+            Field(description="Optional free-text search across incident titles and summaries"),
+        ] = "",
+        teams: Annotated[
+            str,
+            Field(
+                description="Comma-separated team names or slugs to filter incidents (e.g., 'Infrastructure,platform-team')"
+            ),
+        ] = "",
+        team_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated Rootly team IDs to filter incidents (e.g., '123,456')"
+            ),
+        ] = "",
+        service_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated Rootly service IDs to filter incidents (e.g., 'svc-1,svc-2')"
+            ),
+        ] = "",
+        severity: Annotated[
+            str,
+            Field(description="Optional severity filter (e.g., critical, high, medium, low)"),
+        ] = "",
+        status: Annotated[
+            str,
+            Field(
+                description="Optional incident status filter (e.g., started, investigating, resolved)"
+            ),
+        ] = "",
+        started_after: Annotated[
+            str,
+            Field(description="Filter incidents that started at or after this ISO 8601 timestamp"),
+        ] = "",
+        started_before: Annotated[
+            str,
+            Field(description="Filter incidents that started at or before this ISO 8601 timestamp"),
+        ] = "",
+        custom_field_selected_option_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated custom field option IDs for structured incident filtering"
+            ),
+        ] = "",
+        sort: Annotated[
+            Literal["created_at", "-created_at", "updated_at", "-updated_at"],
+            Field(
+                description="Sort order for incidents. Supported values: created_at, -created_at, updated_at, -updated_at"
+            ),
+        ] = "-created_at",
+        page_size: Annotated[
+            int,
+            Field(description="Number of incidents per page (max: 100)", ge=1, le=100),
+        ] = 25,
+        page_number: Annotated[
+            int,
+            Field(description="Page number to retrieve (1-indexed)", ge=1),
+        ] = 1,
+    ) -> JsonDict:
+        """
+        List incidents with structured filters for audit and review workflows.
+
+        Use this when you need date-range, team, service, severity, or status filters.
+        Prefer search_incidents only for lightweight free-text lookups.
+        """
+        try:
+            params, filters = await _prepare_incident_query_context(
+                query=query,
+                teams=teams,
+                team_ids=team_ids,
+                service_ids=service_ids,
+                severity=severity,
+                status=status,
+                started_after=started_after,
+                started_before=started_before,
+                custom_field_selected_option_ids=custom_field_selected_option_ids,
+                sort=sort,
+            )
+        except ValueError as e:
+            return cast(JsonDict, mcp_error.tool_error(str(e), "validation_error"))
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(JsonDict, mcp_error.tool_error(error_message, error_type))
+
+        params["page[size]"] = page_size
+        params["page[number]"] = page_number
+
+        try:
+            response = await make_authenticated_request("GET", "/v1/incidents", params=params)
+            response.raise_for_status()
+
+            response_data = strip_heavy_nested_data(response.json())
+            incidents = response_data.get("data", [])
+            meta = response_data.get("meta", {})
+
+            return {
+                "incidents": [_summarize_incident_record(incident) for incident in incidents],
+                "returned_incidents": len(incidents),
+                "pagination": {
+                    "page_size": page_size,
+                    "page_number": page_number,
+                    "current_page": meta.get("current_page", page_number),
+                    "next_page": meta.get("next_page"),
+                    "prev_page": meta.get("prev_page"),
+                    "total_pages": meta.get("total_pages"),
+                    "total_count": meta.get("total_count"),
+                    "has_more": meta.get("next_page") is not None,
+                },
+                "filters": filters,
+            }
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(JsonDict, mcp_error.tool_error(error_message, error_type))
+
+    @mcp.tool()
+    async def collect_incidents(
+        query: Annotated[
+            str,
+            Field(description="Optional free-text search across incident titles and summaries"),
+        ] = "",
+        teams: Annotated[
+            str,
+            Field(
+                description="Comma-separated team names or slugs to filter incidents (e.g., 'Infrastructure,platform-team')"
+            ),
+        ] = "",
+        team_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated Rootly team IDs to filter incidents (e.g., '123,456')"
+            ),
+        ] = "",
+        service_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated Rootly service IDs to filter incidents (e.g., 'svc-1,svc-2')"
+            ),
+        ] = "",
+        severity: Annotated[
+            str,
+            Field(description="Optional severity filter (e.g., critical, high, medium, low)"),
+        ] = "",
+        status: Annotated[
+            str,
+            Field(
+                description="Optional incident status filter (e.g., started, investigating, resolved)"
+            ),
+        ] = "",
+        started_after: Annotated[
+            str,
+            Field(description="Filter incidents that started at or after this ISO 8601 timestamp"),
+        ] = "",
+        started_before: Annotated[
+            str,
+            Field(description="Filter incidents that started at or before this ISO 8601 timestamp"),
+        ] = "",
+        custom_field_selected_option_ids: Annotated[
+            str,
+            Field(
+                description="Comma-separated custom field option IDs for structured incident filtering"
+            ),
+        ] = "",
+        sort: Annotated[
+            Literal["created_at", "-created_at", "updated_at", "-updated_at"],
+            Field(
+                description="Sort order for incidents. Supported values: created_at, -created_at, updated_at, -updated_at"
+            ),
+        ] = "-created_at",
+        max_results: Annotated[
+            int,
+            Field(
+                description="Maximum number of compact incident summaries to collect across pages (max: 100)",
+                ge=1,
+                le=100,
+            ),
+        ] = 50,
+        batch_size: Annotated[
+            int,
+            Field(
+                description="Number of incidents to request per upstream page while collecting (min: 10, max: 100)",
+                ge=10,
+                le=100,
+            ),
+        ] = 25,
+    ) -> JsonDict:
+        """
+        Collect a bounded working set of incidents across multiple pages for audits and analysis.
+
+        Use this instead of list_incidents when you want a compact batch of incidents in one
+        tool call, while keeping payload size under control.
+        """
+        try:
+            params, filters = await _prepare_incident_query_context(
+                query=query,
+                teams=teams,
+                team_ids=team_ids,
+                service_ids=service_ids,
+                severity=severity,
+                status=status,
+                started_after=started_after,
+                started_before=started_before,
+                custom_field_selected_option_ids=custom_field_selected_option_ids,
+                sort=sort,
+            )
+        except ValueError as e:
+            return cast(JsonDict, mcp_error.tool_error(str(e), "validation_error"))
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(JsonDict, mcp_error.tool_error(error_message, error_type))
+
+        collected_incidents: list[dict[str, Any]] = []
+        page_number = 1
+        pages_fetched = 0
+        total_matching_count: int | None = None
+        results_truncated = False
+
+        try:
+            while len(collected_incidents) < max_results:
+                page_params = dict(params)
+                page_params["page[size]"] = batch_size
+                page_params["page[number]"] = page_number
+
+                response = await make_authenticated_request(
+                    "GET", "/v1/incidents", params=page_params
+                )
+                response.raise_for_status()
+
+                response_data = strip_heavy_nested_data(response.json())
+                page_incidents = response_data.get("data", [])
+                meta = response_data.get("meta", {})
+                pages_fetched += 1
+
+                if total_matching_count is None:
+                    total_matching_count = meta.get("total_count")
+
+                if not page_incidents:
+                    break
+
+                remaining = max_results - len(collected_incidents)
+                if len(page_incidents) > remaining:
+                    results_truncated = True
+                collected_incidents.extend(page_incidents[:remaining])
+
+                next_page = meta.get("next_page")
+                if next_page is None:
+                    break
+                if len(collected_incidents) >= max_results:
+                    results_truncated = True
+                    break
+                page_number = next_page
+
+            if total_matching_count is not None and total_matching_count > len(collected_incidents):
+                results_truncated = True
+
+            return {
+                "incidents": [
+                    _summarize_incident_record(incident) for incident in collected_incidents
+                ],
+                "returned_incidents": len(collected_incidents),
+                "collection": {
+                    "max_results": max_results,
+                    "batch_size": batch_size,
+                    "pages_fetched": pages_fetched,
+                    "total_matching_count": total_matching_count,
+                    "results_truncated": results_truncated,
+                },
+                "filters": filters,
+            }
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(JsonDict, mcp_error.tool_error(error_message, error_type))
 
     @mcp.tool()
     async def search_incidents(
@@ -184,6 +639,100 @@ def register_incident_tools(
                 ),
             )
 
+    @mcp.tool(name="createIncident")
+    async def create_incident(
+        title: Annotated[
+            str | None,
+            Field(description="Incident title. If omitted, Rootly may autogenerate one."),
+        ] = None,
+        summary: Annotated[
+            str | None,
+            Field(description="Incident summary or short description."),
+        ] = None,
+        severity_id: Annotated[
+            str | None,
+            Field(description="Optional severity ID to attach to the incident."),
+        ] = None,
+        service_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated service IDs to attach to the incident."),
+        ] = None,
+        team_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated team IDs to attach to the incident."),
+        ] = None,
+        environment_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated environment IDs to attach to the incident."),
+        ] = None,
+        incident_type_ids: Annotated[
+            str | None,
+            Field(description="Comma-separated incident type IDs to attach to the incident."),
+        ] = None,
+    ) -> JsonDict:
+        """Create an incident with a scoped set of fields for agent-driven workflows."""
+        normalized_title = _normalize_optional_text(title)
+        normalized_summary = _normalize_optional_text(summary)
+
+        if normalized_title is None and normalized_summary is None:
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    "Must provide at least one of title or summary",
+                    "validation_error",
+                ),
+            )
+
+        attributes: dict[str, Any] = {}
+
+        if normalized_title is not None:
+            attributes["title"] = normalized_title
+        if normalized_summary is not None:
+            attributes["summary"] = normalized_summary
+
+        normalized_severity_id = _normalize_optional_text(severity_id)
+        if normalized_severity_id is not None:
+            attributes["severity_id"] = normalized_severity_id
+
+        csv_attribute_map = (
+            ("service_ids", service_ids),
+            ("group_ids", team_ids),
+            ("environment_ids", environment_ids),
+            ("incident_type_ids", incident_type_ids),
+        )
+        for attribute_name, raw_value in csv_attribute_map:
+            if raw_value is None:
+                continue
+            values = _split_csv_values(raw_value)
+            if values:
+                attributes[attribute_name] = values
+
+        payload = {
+            "data": {
+                "type": "incidents",
+                "attributes": attributes,
+            }
+        }
+
+        try:
+            response = await make_authenticated_request("POST", "/v1/incidents", json=payload)
+            response.raise_for_status()
+
+            response_data = response.json()
+            if isinstance(response_data.get("data"), dict):
+                stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
+                response_data["data"] = stripped["data"][0]
+            return cast(JsonDict, response_data)
+        except Exception as e:
+            error_type, error_message = mcp_error.categorize_error(e)
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    f"Failed to create incident: {error_message}",
+                    error_type,
+                ),
+            )
+
     @mcp.tool(name="updateIncident")
     async def update_incident(
         incident_id: Annotated[str, Field(description="Incident ID to update")],
@@ -302,7 +851,8 @@ def register_incident_tools(
                 return cast(
                     JsonDict,
                     mcp_error.tool_error(
-                    "Must provide either incident_id or incident_description", "validation_error"
+                        "Must provide either incident_id or incident_description",
+                        "validation_error",
                     ),
                 )
 
