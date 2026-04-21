@@ -350,13 +350,13 @@ class TestBundledIncidentFormFieldSelectionTools:
     ):
         server = create_rootly_mcp_server(
             hosted=False,
-            enabled_tools={"listTeams", "get_server_version"},
+            enabled_tools={"listTeams", "listSeverities"},
         )
 
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
-        assert tool_names == {"listTeams", "get_server_version"}
+        assert tool_names == {"listTeams", "listSeverities"}
 
 
 @pytest.mark.unit
