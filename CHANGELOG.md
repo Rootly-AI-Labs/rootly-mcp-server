@@ -5,6 +5,21 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.20] - Released 2026-04-21
+
+### Security
+
+- **Critical Security Updates**: Upgraded vulnerable dependencies to address 3 security advisories
+- **authlib**: Updated from `1.6.9` to `1.7.0` to fix CSRF protection vulnerability (GHSA-jj8c-mmj3-mmgv)
+- **python-dotenv**: Updated from `1.1.0` to `1.2.2` to fix symlink attack vulnerability (GHSA-m8f7-34r5-grfg) 
+- **python-multipart**: Updated from `0.0.22` to `0.0.26` to fix denial of service vulnerability (CVE-2026-40347)
+- **Dependabot Configuration**: Fixed unsupported `semver-major-days` property for docker and github-actions ecosystems
+
+### Dependencies
+
+- **joserfc**: Added `1.6.4` as new dependency (required by updated authlib)
+- **Security Scanning**: All known vulnerabilities resolved as confirmed by pip-audit
+
 ## [2.2.19] - Released 2026-04-17
 
 ### Features
