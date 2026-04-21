@@ -84,14 +84,14 @@ def _terminate_process(process: subprocess.Popen[str]) -> str:
     ("enabled_tools", "enable_write_tools", "expected_tools"),
     [
         (
-            "listIncidents,getIncident,listTeams",
+            "getIncident,getCurrentUser,getTeam",
             False,
-            ["getIncident", "listIncidents", "listTeams"],
+            ["getCurrentUser", "getIncident", "getTeam"],
         ),
         (
-            "createIncident,createWorkflowTask,listTeams",
+            "createIncident,createWorkflowTask,getTeam",
             True,
-            ["createIncident", "createWorkflowTask", "listTeams"],
+            ["createIncident", "createWorkflowTask", "getTeam"],
         ),
     ],
 )
