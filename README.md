@@ -310,6 +310,8 @@ By default, the self-hosted server exposes read tools only. To enable the curate
 
 Hosted/remote deployments keep the existing write surface by default for backward compatibility.
 
+To expose only a specific subset of MCP tools on a self-hosted deployment, set `ROOTLY_MCP_ENABLED_TOOLS` (or pass `--enabled-tools`) with a comma-separated allowlist of exact tool names, for example `list_incidents,getIncident,get_server_version`.
+
 Example Docker run (Streamable HTTP):
 
 ```bash
