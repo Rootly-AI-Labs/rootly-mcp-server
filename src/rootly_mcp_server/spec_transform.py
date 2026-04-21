@@ -161,9 +161,7 @@ def _filter_openapi_spec(
         _normalize_path_template(path) for path in delete_allowed_set
     }
     write_allowed_set = set(write_allowed_paths or allowed_paths)
-    write_allowed_normalized_paths = {
-        _normalize_path_template(path) for path in write_allowed_set
-    }
+    write_allowed_normalized_paths = {_normalize_path_template(path) for path in write_allowed_set}
     paths_to_remove: list[str] = []
     for path, path_item in filtered_paths.items():
         allow_write = enable_write_tools and (
