@@ -115,6 +115,7 @@ def enabled_tools_from_env() -> set[str] | None:
 
 # Default allowed API paths
 DEFAULT_ALLOWED_PATHS = [
+    "/incidents",
     "/incidents/{incident_id}/alerts",
     "/alerts",
     "/alerts/{id}",
