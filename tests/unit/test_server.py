@@ -1211,6 +1211,7 @@ class TestOpenAPISpecFiltering:
             original_spec,
             allowed_paths,
             delete_allowed_paths=delete_allowed_paths,
+            enable_write_tools=True,
         )
         filtered_paths = filtered_spec["paths"]
 

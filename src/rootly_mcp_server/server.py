@@ -431,37 +431,6 @@ def create_rootly_mcp_server(
     swagger_spec = _load_swagger_spec(swagger_path)
     logger.info(f"Loaded Swagger spec with {len(swagger_spec.get('paths', {}))} total paths")
 
-    # Validate enabled tools if provided
-    if enabled_tools:
-        valid_tools, invalid_tools = server_defaults.validate_tool_names(
-            enabled_tools, swagger_spec.get("paths", {})
-        )
-
-        if invalid_tools:
-            audit.audit.log_configuration_error(
-                "invalid_tool_names",
-                f"Invalid tool names in allowlist: {', '.join(invalid_tools)}",
-                {"invalid_tools": invalid_tools, "valid_tools": list(valid_tools)},
-            )
-            logger.warning(
-                "Invalid tool names in allowlist (will be ignored): %s. "
-                "Use --list-tools to see available options.",
-                ", ".join(sorted(invalid_tools)),
-            )
-
-        if not valid_tools and enabled_tools:
-            error_msg = "No valid tools found in allowlist"
-            audit.audit.log_configuration_error(
-                "no_valid_tools", error_msg, {"requested_tools": list(enabled_tools)}
-            )
-            raise ValueError(error_msg)
-
-        # Log validation results
-        audit.audit.log_tool_validation(enabled_tools, valid_tools, invalid_tools)
-
-        # Use only valid tools
-        enabled_tools = valid_tools if valid_tools else None
-
     # Filter the OpenAPI spec to only include allowed paths
     filtered_spec = _filter_openapi_spec(
         swagger_spec,
@@ -471,6 +440,45 @@ def create_rootly_mcp_server(
         enable_write_tools=enable_write_tools,
         enabled_operation_ids=enabled_tools,
     )
+
+    # Validate enabled tools against the filtered spec (after path filtering)
+    if enabled_tools:
+        valid_tools, invalid_tools = server_defaults.validate_tool_names(
+            enabled_tools, filtered_spec.get("paths", {})
+        )
+
+        if invalid_tools:
+            audit.audit.log_configuration_error(
+                "invalid_tool_names",
+                f"Invalid tool names in allowlist after filtering: {', '.join(invalid_tools)}",
+                {"invalid_tools": invalid_tools, "valid_tools": list(valid_tools)},
+            )
+            logger.warning(
+                "Invalid tool names in allowlist (will be ignored): %s. "
+                "Use --list-tools to see available options.",
+                ", ".join(sorted(invalid_tools)),
+            )
+
+        if not valid_tools and enabled_tools:
+            error_msg = "No valid tools found in allowlist after path filtering"
+            audit.audit.log_configuration_error(
+                "no_valid_tools", error_msg, {"requested_tools": list(enabled_tools)}
+            )
+            raise ValueError(error_msg)
+
+        # Log validation results
+        audit.audit.log_tool_validation(enabled_tools, valid_tools, invalid_tools)
+
+        # Update the filtered spec to only include valid tools
+        if valid_tools != enabled_tools:
+            filtered_spec = _filter_openapi_spec(
+                swagger_spec,
+                allowed_paths_v1,
+                delete_allowed_paths=delete_allowed_paths_v1,
+                write_allowed_paths=write_allowed_paths_v1,
+                enable_write_tools=enable_write_tools,
+                enabled_operation_ids=valid_tools,
+            )
     logger.info(f"Filtered spec to {len(filtered_spec.get('paths', {}))} allowed paths")
 
     # Log server configuration for audit trail

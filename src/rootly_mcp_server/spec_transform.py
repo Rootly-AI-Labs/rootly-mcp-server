@@ -119,7 +119,7 @@ def _filter_openapi_spec(
     allowed_paths: list[str],
     delete_allowed_paths: list[str] | None = None,
     write_allowed_paths: list[str] | None = None,
-    enable_write_tools: bool = True,
+    enable_write_tools: bool = False,
     enabled_operation_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """
