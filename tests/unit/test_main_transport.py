@@ -1,11 +1,12 @@
 """Tests for CLI transport normalization and config propagation in __main__."""
 
 import argparse
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from rootly_mcp_server.__main__ import get_server, normalize_transport
+from rootly_mcp_server.__main__ import _get_sorted_tool_names, get_server, main, normalize_transport
 
 
 @pytest.mark.parametrize(
@@ -76,3 +77,59 @@ def test_get_server_keeps_hosted_default_write_surface():
     assert mock_create.call_args is not None
     assert mock_create.call_args.kwargs["hosted"] is True
     assert mock_create.call_args.kwargs["enable_write_tools"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_sorted_tool_names_returns_sorted_names():
+    server = SimpleNamespace(
+        list_tools=AsyncMock(
+            return_value=[
+                SimpleNamespace(name="getIncident"),
+                SimpleNamespace(name="createIncident"),
+                SimpleNamespace(name="listTeams"),
+            ]
+        )
+    )
+
+    names = await _get_sorted_tool_names(server)
+
+    assert names == ["createIncident", "getIncident", "listTeams"]
+
+
+def test_main_list_tools_prints_effective_tool_names_and_exits(capsys):
+    args = SimpleNamespace(
+        swagger_path=None,
+        log_level="ERROR",
+        name="Rootly",
+        transport="stdio",
+        debug=False,
+        base_url=None,
+        allowed_paths=None,
+        hosted=False,
+        enable_code_mode=False,
+        enable_write_tools=False,
+        enabled_tools=None,
+        list_tools=True,
+        code_mode_path=None,
+        host=False,
+    )
+    fake_server = object()
+
+    def fake_asyncio_run(coro):
+        coro.close()
+        return ["get_server_version", "list_incidents"]
+
+    with patch("rootly_mcp_server.__main__.parse_args", return_value=args):
+        with patch("rootly_mcp_server.__main__.setup_logging"):
+            with patch("rootly_mcp_server.__main__.check_api_token"):
+                with patch(
+                    "rootly_mcp_server.__main__.create_rootly_mcp_server", return_value=fake_server
+                ):
+                    with patch(
+                        "rootly_mcp_server.__main__.asyncio.run",
+                        side_effect=fake_asyncio_run,
+                    ) as mock_run:
+                        main()
+
+    assert mock_run.call_count == 1
+    assert capsys.readouterr().out.splitlines() == ["get_server_version", "list_incidents"]

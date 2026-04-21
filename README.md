@@ -312,6 +312,15 @@ Hosted/remote deployments keep the existing write surface by default for backwar
 
 To expose only a specific subset of MCP tools on a self-hosted deployment, set `ROOTLY_MCP_ENABLED_TOOLS` (or pass `--enabled-tools`) with a comma-separated allowlist of exact tool names, for example `list_incidents,getIncident,get_server_version`.
 
+To discover the exact tool names available under your current self-hosted configuration, run:
+
+```bash
+ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+uv run python -m rootly_mcp_server --list-tools
+```
+
+This prints the effective MCP tool names after applying your current settings, including `ROOTLY_MCP_ENABLE_WRITE_TOOLS` and `ROOTLY_MCP_ENABLED_TOOLS`.
+
 Smoke-test a self-hosted allowlist:
 
 ```bash

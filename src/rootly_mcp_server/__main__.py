@@ -6,6 +6,7 @@ This module provides the main entry point for the Rootly MCP Server.
 """
 
 import argparse
+import asyncio
 import logging
 import os
 import sys
@@ -125,6 +126,11 @@ def parse_args():
         help="Comma-separated allowlist of exact MCP tool names to expose",
     )
     parser.add_argument(
+        "--list-tools",
+        action="store_true",
+        help="Print the exact MCP tool names exposed by the current configuration, then exit",
+    )
+    parser.add_argument(
         "--code-mode-path",
         type=str,
         help="Hosted path for the Code Mode endpoint. Default: /mcp-codemode",
@@ -214,6 +220,12 @@ def get_server():
         enable_write_tools=enable_write_tools,
         enabled_tools=enabled_tools,
     )
+
+
+async def _get_sorted_tool_names(server) -> list[str]:
+    """Return the effective MCP tool names for the provided server."""
+    tools = await server.list_tools()
+    return sorted(tool.name for tool in tools)
 
 
 # Create the server instance for FastMCP CLI (follows quickstart pattern).
@@ -411,6 +423,11 @@ def main():
             enable_write_tools=enable_write_tools,
             enabled_tools=enabled_tools,
         )
+
+        if args.list_tools:
+            for tool_name in asyncio.run(_get_sorted_tool_names(server)):
+                print(tool_name)
+            return
 
         code_mode_server = None
         if code_mode_enabled:
