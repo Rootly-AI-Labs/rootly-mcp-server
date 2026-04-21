@@ -83,6 +83,8 @@ def test_create_rootly_codemode_server_adds_code_mode_transform():
             allowed_paths=["/incidents"],
             hosted=True,
             base_url="https://api.rootly.com",
+            enable_write_tools=True,
+            enabled_tools={"list_incidents", "getIncident"},
         )
 
     assert server is mock_transform_server
@@ -94,6 +96,8 @@ def test_create_rootly_codemode_server_adds_code_mode_transform():
         hosted=True,
         base_url="https://api.rootly.com",
         transport="streamable-http",
+        enable_write_tools=True,
+        enabled_tools={"list_incidents", "getIncident"},
     )
 
 

@@ -290,7 +290,8 @@ A **Global API Key** is recommended for organization-wide queries and for action
         "rootly-mcp-server"
       ],
       "env": {
-        "ROOTLY_API_TOKEN": "<YOUR_ROOTLY_API_TOKEN>"
+        "ROOTLY_API_TOKEN": "<YOUR_ROOTLY_API_TOKEN>",
+        "ROOTLY_MCP_ENABLE_WRITE_TOOLS": "true"
       }
     }
   }
@@ -305,12 +306,53 @@ Choose one transport per server process:
 - **SSE** endpoint path: `/sse`
 - **Code Mode (experimental)** endpoint path: `/mcp-codemode` in hosted dual-transport mode
 
+By default, the self-hosted server exposes read tools only. To enable the curated non-destructive write surface, start the server with `--enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=true`.
+
+Hosted/remote deployments keep the existing write surface by default for backward compatibility.
+
+To expose only a specific subset of MCP tools on a self-hosted deployment, set `ROOTLY_MCP_ENABLED_TOOLS` (or pass `--enabled-tools`) with a comma-separated allowlist of exact tool names, for example `list_incidents,getIncident,get_server_version`.
+
+To discover the exact tool names available under your current self-hosted configuration, run:
+
+```bash
+ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+uv run python -m rootly_mcp_server --list-tools
+```
+
+This prints the effective MCP tool names after applying your current settings, including `ROOTLY_MCP_ENABLE_WRITE_TOOLS` and `ROOTLY_MCP_ENABLED_TOOLS`.
+
+Smoke-test a self-hosted allowlist:
+
+```bash
+ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+ROOTLY_MCP_ENABLED_TOOLS=list_incidents,getIncident,get_server_version \
+uv run python -m rootly_mcp_server --transport streamable-http --log-level ERROR
+```
+
+Then connect an MCP client to `http://127.0.0.1:8000/mcp` and verify `tools/list` returns only:
+
+```text
+get_server_version
+getIncident
+list_incidents
+```
+
+To include specific write tools for self-hosted testing, add both the write flag and the allowlist:
+
+```bash
+ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+ROOTLY_MCP_ENABLE_WRITE_TOOLS=true \
+ROOTLY_MCP_ENABLED_TOOLS=createIncident,createWorkflowTask,listTeams \
+uv run python -m rootly_mcp_server --transport streamable-http --log-level ERROR
+```
+
 Example Docker run (Streamable HTTP):
 
 ```bash
 docker run -p 8000:8000 \
   -e ROOTLY_TRANSPORT=streamable-http \
   -e ROOTLY_API_TOKEN=<YOUR_ROOTLY_API_TOKEN> \
+  -e ROOTLY_MCP_ENABLE_WRITE_TOOLS=true \
   rootly-mcp-server
 ```
 

@@ -2,6 +2,36 @@
 
 from __future__ import annotations
 
+import logging
+import os
+
+# Set up logger
+logger = logging.getLogger(__name__)
+
+
+# Environment variable constants
+class EnvVars:
+    """Centralized environment variable names for type safety and IDE support."""
+
+    API_TOKEN = "ROOTLY_API_TOKEN"  # nosec B105 - Environment variable name, not password
+    BASE_URL = "ROOTLY_BASE_URL"
+    SERVER_NAME = "ROOTLY_SERVER_NAME"
+    HOSTED = "ROOTLY_HOSTED"
+    ENABLE_WRITE_TOOLS = "ROOTLY_MCP_ENABLE_WRITE_TOOLS"
+    ENABLED_TOOLS = "ROOTLY_MCP_ENABLED_TOOLS"
+    TRANSPORT = "ROOTLY_TRANSPORT"
+    ALLOWED_PATHS = "ROOTLY_ALLOWED_PATHS"
+    SWAGGER_PATH = "ROOTLY_SWAGGER_PATH"
+    LOG_LEVEL = "ROOTLY_LOG_LEVEL"
+
+
+def _parse_csv_set(raw: str | None) -> set[str] | None:
+    """Parse a comma-separated environment value into a normalized set."""
+    if raw is None:
+        return None
+    parsed = {item.strip() for item in raw.split(",") if item.strip()}
+    return parsed or None
+
 
 def _generate_recommendation(solution_data: dict) -> str:
     """Generate a high-level recommendation based on solution analysis."""
@@ -41,8 +71,51 @@ def _generate_recommendation(solution_data: dict) -> str:
     )
 
 
+def write_tools_enabled_from_env(default: bool = False) -> bool:
+    """Return whether non-destructive write tools should be exposed."""
+    raw = os.getenv(EnvVars.ENABLE_WRITE_TOOLS)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def validate_tool_names(
+    enabled_tools: set[str], available_operations: dict
+) -> tuple[set[str], list[str]]:
+    """
+    Validate tool names against available OpenAPI operations.
+
+    Args:
+        enabled_tools: Set of tool names to validate
+        available_operations: OpenAPI paths dict from swagger spec
+
+    Returns:
+        tuple: (valid_tools, invalid_tools)
+    """
+    if not enabled_tools:
+        return set(), []
+
+    # Extract all available operation IDs from OpenAPI spec
+    available_tool_names = set()
+    for path_data in available_operations.values():
+        for method_data in path_data.values():
+            if isinstance(method_data, dict) and (operation_id := method_data.get("operationId")):
+                available_tool_names.add(operation_id)
+
+    valid_tools = enabled_tools & available_tool_names
+    invalid_tools = list(enabled_tools - available_tool_names)
+
+    return valid_tools, invalid_tools
+
+
+def enabled_tools_from_env() -> set[str] | None:
+    """Return an optional explicit allowlist of MCP tool names to expose."""
+    return _parse_csv_set(os.getenv(EnvVars.ENABLED_TOOLS))
+
+
 # Default allowed API paths
 DEFAULT_ALLOWED_PATHS = [
+    "/incidents",
     "/incidents/{incident_id}/alerts",
     "/alerts",
     "/alerts/{id}",
@@ -107,6 +180,17 @@ DEFAULT_ALLOWED_PATHS = [
     "/on_call_shadows/{on_call_shadow_id}",
     "/on_call_roles",
     "/on_call_roles/{on_call_role_id}",
+]
+
+# Non-destructive write operations are only exposed for these path families when
+# write tools are explicitly enabled. This keeps the default surface focused on
+# read-only workflows and avoids exposing broader admin/config writes.
+DEFAULT_WRITE_ALLOWED_PATHS = [
+    "/incidents/{incident_id}/action_items",
+    "/incidents/{incident_id}/form_field_selections",
+    "/incident_form_field_selections/{id}",
+    "/workflows/{workflow_id}/workflow_tasks",
+    "/workflow_tasks/{id}",
 ]
 
 # DELETE operations are only exposed for these high-priority screenshot families.

@@ -1,6 +1,12 @@
 """Focused tests for server_defaults module."""
 
-from rootly_mcp_server.server_defaults import DEFAULT_ALLOWED_PATHS, _generate_recommendation
+from unittest.mock import patch
+
+from rootly_mcp_server.server_defaults import (
+    DEFAULT_ALLOWED_PATHS,
+    _generate_recommendation,
+    enabled_tools_from_env,
+)
 
 
 class TestServerDefaultsModule:
@@ -39,3 +45,11 @@ class TestServerDefaultsModule:
         }
         result = _generate_recommendation(solution_data)
         assert "require more time" in result
+
+    def test_enabled_tools_from_env_parses_csv(self):
+        with patch.dict(
+            "os.environ",
+            {"ROOTLY_MCP_ENABLED_TOOLS": "list_incidents, getIncident ,listTeams"},
+            clear=True,
+        ):
+            assert enabled_tools_from_env() == {"list_incidents", "getIncident", "listTeams"}

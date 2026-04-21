@@ -1,6 +1,6 @@
 [project]
 name = "rootly-mcp-server"
-version = "2.2.19"
+version = "2.2.20"
 description = "Secure Model Context Protocol server for Rootly APIs with AI SRE capabilities, comprehensive error handling, and input validation"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -37,7 +37,9 @@ classifiers = [
 ]
 dependencies = [
     "fastmcp[code-mode]==3.2.0",  # Pin to patched version with Code Mode support
-    "authlib>=1.6.9",  # Override vulnerable transitive authlib from fastmcp
+    "authlib>=1.6.11",  # Override vulnerable transitive authlib (GHSA-jj8c-mmj3-mmgv)
+    "python-dotenv>=1.2.2",  # Override vulnerable transitive python-dotenv (GHSA-m8f7-34r5-grfg)
+    "python-multipart>=0.0.26",  # Override vulnerable transitive python-multipart (CVE-2026-40347)
     "cryptography>=46.0.7",  # Override vulnerable transitive cryptography
     "Pygments>=2.20.0",  # Override vulnerable transitive Pygments
     "requests==2.33.1", # Pin to patched version
