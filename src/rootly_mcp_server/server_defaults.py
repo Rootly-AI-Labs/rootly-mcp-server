@@ -5,6 +5,14 @@ from __future__ import annotations
 import os
 
 
+def _parse_csv_set(raw: str | None) -> set[str] | None:
+    """Parse a comma-separated environment value into a normalized set."""
+    if raw is None:
+        return None
+    parsed = {item.strip() for item in raw.split(",") if item.strip()}
+    return parsed or None
+
+
 def _generate_recommendation(solution_data: dict) -> str:
     """Generate a high-level recommendation based on solution analysis."""
     solutions = solution_data.get("solutions", [])
@@ -49,6 +57,11 @@ def write_tools_enabled_from_env(default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def enabled_tools_from_env() -> set[str] | None:
+    """Return an optional explicit allowlist of MCP tool names to expose."""
+    return _parse_csv_set(os.getenv("ROOTLY_MCP_ENABLED_TOOLS"))
 
 
 # Default allowed API paths

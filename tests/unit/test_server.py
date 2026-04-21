@@ -190,6 +190,32 @@ class TestServerCreation:
         assert "post" in filtered["paths"]["/v1/workflows/123/workflow_tasks"]
         assert "put" in filtered["paths"]["/v1/workflow_tasks/456"]
 
+    def test_filter_openapi_spec_can_allowlist_specific_operation_ids(self):
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/v1/teams": {
+                    "get": {"operationId": "listTeams"},
+                    "post": {"operationId": "createTeam"},
+                },
+                "/v1/users/me": {
+                    "get": {"operationId": "getCurrentUser"},
+                },
+            },
+            "components": {"schemas": {}},
+        }
+
+        filtered = _filter_openapi_spec(
+            spec,
+            ["/v1/teams", "/v1/users/me"],
+            enabled_operation_ids={"listTeams"},
+        )
+
+        assert "get" in filtered["paths"]["/v1/teams"]
+        assert "post" not in filtered["paths"]["/v1/teams"]
+        assert "/v1/users/me" not in filtered["paths"]
+
     def test_create_server_with_bundled_swagger(self):
         """Ensure FastMCP can instantiate from the bundled swagger without schema errors."""
         swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
@@ -318,6 +344,19 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "createIncidentFormFieldSelection" in tool_names
         assert "updateIncidentFormFieldSelection" in tool_names
         assert "deleteWorkflowTask" not in tool_names
+
+    async def test_enabled_tools_allowlist_filters_generated_and_custom_tools(
+        self, mock_environment_token
+    ):
+        server = create_rootly_mcp_server(
+            hosted=False,
+            enabled_tools={"listTeams", "get_server_version"},
+        )
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert tool_names == {"listTeams", "get_server_version"}
 
 
 @pytest.mark.unit

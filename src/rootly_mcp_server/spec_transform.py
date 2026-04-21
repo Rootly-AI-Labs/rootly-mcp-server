@@ -120,6 +120,7 @@ def _filter_openapi_spec(
     delete_allowed_paths: list[str] | None = None,
     write_allowed_paths: list[str] | None = None,
     enable_write_tools: bool = True,
+    enabled_operation_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """
     Filter an OpenAPI specification to only include specified paths and clean up schema references.
@@ -130,6 +131,7 @@ def _filter_openapi_spec(
         delete_allowed_paths: Path templates where DELETE operations are allowed.
         write_allowed_paths: Path templates where POST/PUT/PATCH are allowed.
         enable_write_tools: Whether non-destructive write operations are exposed.
+        enabled_operation_ids: Optional allowlist of OpenAPI operationIds to expose.
 
     Returns:
         A filtered OpenAPI specification with cleaned schema references.
@@ -184,6 +186,25 @@ def _filter_openapi_spec(
             paths_to_remove.append(path)
     for path in paths_to_remove:
         del filtered_paths[path]
+
+    if enabled_operation_ids is not None:
+        paths_to_remove = []
+        for path, path_item in filtered_paths.items():
+            methods_to_remove: list[str] = []
+            for method, operation in path_item.items():
+                if method.lower() not in ["get", "post", "put", "patch", "delete"]:
+                    continue
+                operation_id = operation.get("operationId")
+                if operation_id not in enabled_operation_ids:
+                    methods_to_remove.append(method)
+            for method in methods_to_remove:
+                path_item.pop(method, None)
+            if not any(
+                method.lower() in ["get", "post", "put", "patch", "delete"] for method in path_item
+            ):
+                paths_to_remove.append(path)
+        for path in paths_to_remove:
+            del filtered_paths[path]
 
     # Clean up schema references that might be broken
     # Remove problematic schema references from request bodies and parameters

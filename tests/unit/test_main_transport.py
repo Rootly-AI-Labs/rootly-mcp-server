@@ -45,6 +45,19 @@ def test_get_server_passes_write_tool_env_flag():
     assert mock_create.call_args.kwargs["enable_write_tools"] is True
 
 
+def test_get_server_passes_enabled_tools_env_flag():
+    with patch.dict(
+        "os.environ",
+        {"ROOTLY_MCP_ENABLED_TOOLS": "list_incidents,getIncident"},
+        clear=True,
+    ):
+        with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:
+            get_server()
+
+    assert mock_create.call_args is not None
+    assert mock_create.call_args.kwargs["enabled_tools"] == {"list_incidents", "getIncident"}
+
+
 def test_get_server_defaults_self_hosted_to_read_only():
     with patch.dict("os.environ", {}, clear=True):
         with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:

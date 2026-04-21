@@ -22,7 +22,7 @@ from .code_mode import (
 from .exceptions import RootlyConfigurationError, RootlyMCPError
 from .security import validate_api_token
 from .server import create_rootly_mcp_server, get_hosted_auth_middleware
-from .server_defaults import write_tools_enabled_from_env
+from .server_defaults import enabled_tools_from_env, write_tools_enabled_from_env
 
 TransportName = Literal["stdio", "sse", "streamable-http", "both"]
 TRANSPORT_ALIASES: dict[str, TransportName] = {
@@ -120,6 +120,11 @@ def parse_args():
         help="Expose curated non-destructive write tools in addition to read tools",
     )
     parser.add_argument(
+        "--enabled-tools",
+        type=str,
+        help="Comma-separated allowlist of exact MCP tool names to expose",
+    )
+    parser.add_argument(
         "--code-mode-path",
         type=str,
         help="Hosted path for the Code Mode endpoint. Default: /mcp-codemode",
@@ -190,6 +195,7 @@ def get_server():
     base_url = os.getenv("ROOTLY_BASE_URL")
     transport = normalize_transport_or_default(os.getenv("ROOTLY_TRANSPORT", "stdio"))
     enable_write_tools = write_tools_enabled_from_env(default=hosted)
+    enabled_tools = enabled_tools_from_env()
 
     # Parse allowed paths from environment variable
     allowed_paths = None
@@ -206,6 +212,7 @@ def get_server():
         base_url=base_url,
         transport=transport,
         enable_write_tools=enable_write_tools,
+        enabled_tools=enabled_tools,
     )
 
 
@@ -376,6 +383,11 @@ def main():
         allowed_paths = None
         if args.allowed_paths:
             allowed_paths = [path.strip() for path in args.allowed_paths.split(",")]
+        enabled_tools = (
+            {tool.strip() for tool in args.enabled_tools.split(",") if tool.strip()}
+            if args.enabled_tools
+            else enabled_tools_from_env()
+        )
 
         logger.info(f"Initializing server with name: {args.name}")
         # argparse already normalizes/validates --transport via type=normalize_transport
@@ -397,6 +409,7 @@ def main():
             base_url=args.base_url,
             transport=normalized_transport,
             enable_write_tools=enable_write_tools,
+            enabled_tools=enabled_tools,
         )
 
         code_mode_server = None
@@ -416,6 +429,7 @@ def main():
                     hosted=hosted_mode,
                     base_url=args.base_url,
                     enable_write_tools=enable_write_tools,
+                    enabled_tools=enabled_tools,
                 )
                 logger.info("Code Mode enabled at path: %s", code_mode_path)
 

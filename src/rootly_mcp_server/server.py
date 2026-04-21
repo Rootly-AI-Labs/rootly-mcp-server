@@ -378,6 +378,7 @@ def create_rootly_mcp_server(
     delete_allowed_paths: list[str] | None = None,
     enable_write_tools: bool | None = None,
     write_allowed_paths: list[str] | None = None,
+    enabled_tools: set[str] | None = None,
 ) -> FastMCP:
     """
     Create a Rootly MCP Server using FastMCP's OpenAPI integration.
@@ -395,6 +396,8 @@ def create_rootly_mcp_server(
             If None, uses ROOTLY_MCP_ENABLE_WRITE_TOOLS.
         write_allowed_paths: Path templates where POST/PUT/PATCH operations are exposed
             when write tools are enabled. If None, uses DEFAULT_WRITE_ALLOWED_PATHS.
+        enabled_tools: Optional allowlist of exact MCP tool names to expose.
+            If None, uses ROOTLY_MCP_ENABLED_TOOLS when set.
 
     Returns:
         A FastMCP server instance.
@@ -404,6 +407,8 @@ def create_rootly_mcp_server(
         allowed_paths = DEFAULT_ALLOWED_PATHS
     if enable_write_tools is None:
         enable_write_tools = server_defaults.write_tools_enabled_from_env(default=hosted)
+    if enabled_tools is None:
+        enabled_tools = server_defaults.enabled_tools_from_env()
     if delete_allowed_paths is None:
         delete_allowed_paths = []
     if write_allowed_paths is None:
@@ -433,6 +438,7 @@ def create_rootly_mcp_server(
         delete_allowed_paths=delete_allowed_paths_v1,
         write_allowed_paths=write_allowed_paths_v1,
         enable_write_tools=enable_write_tools,
+        enabled_operation_ids=enabled_tools,
     )
     logger.info(f"Filtered spec to {len(filtered_spec.get('paths', {}))} allowed paths")
 
@@ -596,6 +602,20 @@ def create_rootly_mcp_server(
         make_authenticated_request=make_authenticated_request,
         mcp_error=MCPError,
     )
+
+    if enabled_tools is not None:
+        component_names = [
+            component.name
+            for component_key, component in mcp._local_provider._components.items()  # noqa: SLF001
+            if component_key.startswith("tool:") and getattr(component, "name", None)
+        ]
+        for tool_name in component_names:
+            if tool_name not in enabled_tools:
+                mcp.local_provider.remove_tool(tool_name)
+        logger.info(
+            "Applied MCP tool allowlist: %s",
+            ", ".join(sorted(enabled_tools)),
+        )
 
     # In hosted HTTP modes, configure ASGI middleware for auth token capture.
     # Callers retrieve via get_hosted_auth_middleware() and pass to server.run(middleware=...).
