@@ -1185,7 +1185,7 @@ class TestOAuthProtectedResourceRoute:
 
             # Check that the route is in additional HTTP routes
             routes = server._get_additional_http_routes()
-            route_paths = [r.path for r in routes]
+            route_paths = [getattr(r, "path", None) for r in routes]
             assert OAUTH_PROTECTED_RESOURCE_PATH in route_paths
             # RFC 9728 §5: path-suffixed variant
             assert OAUTH_PROTECTED_RESOURCE_PATH + "/{path:path}" in route_paths
@@ -1204,5 +1204,5 @@ class TestOAuthProtectedResourceRoute:
             server = create_rootly_mcp_server(hosted=False)
 
             routes = server._get_additional_http_routes()
-            route_paths = [r.path for r in routes]
+            route_paths = [getattr(r, "path", None) for r in routes]
             assert OAUTH_PROTECTED_RESOURCE_PATH not in route_paths
