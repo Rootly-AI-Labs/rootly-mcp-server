@@ -7,8 +7,8 @@ from contextvars import ContextVar
 from typing import Any
 
 # Context variables for tracking session info
-current_session: ContextVar[str | None] = ContextVar('current_session', default=None)
-current_user: ContextVar[str | None] = ContextVar('current_user', default=None)
+current_session: ContextVar[str | None] = ContextVar("current_session", default=None)
+current_user: ContextVar[str | None] = ContextVar("current_user", default=None)
 
 
 class AuditLogger:
@@ -37,11 +37,13 @@ class AuditLogger:
             "session_id": current_session.get(),
             "user_id": current_user.get(),
             "timestamp": time.time(),
-            **details
+            **details,
         }
         self.logger.info(json.dumps(event))
 
-    def log_tool_validation(self, enabled_tools: set[str], valid_tools: set[str], invalid_tools: list[str]):
+    def log_tool_validation(
+        self, enabled_tools: set[str], valid_tools: set[str], invalid_tools: list[str]
+    ):
         """Log tool name validation results."""
         event = {
             "event_type": "tool_validation",
@@ -50,7 +52,7 @@ class AuditLogger:
             "invalid_tools_count": len(invalid_tools),
             "invalid_tools": invalid_tools,
             "session_id": current_session.get(),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
         self.logger.info(json.dumps(event))
 
@@ -63,11 +65,13 @@ class AuditLogger:
             "hosted_mode": config.get("hosted", False),
             "allowlist_enabled": bool(config.get("enabled_tools")),
             "transport": config.get("transport", "unknown"),
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
         self.logger.info(json.dumps(event))
 
-    def log_tool_access_attempt(self, tool_name: str, method: str, success: bool, details: dict[str, Any] | None = None):
+    def log_tool_access_attempt(
+        self, tool_name: str, method: str, success: bool, details: dict[str, Any] | None = None
+    ):
         """Log individual tool access attempts."""
         event = {
             "event_type": "tool_access",
@@ -77,11 +81,13 @@ class AuditLogger:
             "session_id": current_session.get(),
             "user_id": current_user.get(),
             "timestamp": time.time(),
-            **(details or {})
+            **(details or {}),
         }
         self.logger.info(json.dumps(event))
 
-    def log_configuration_error(self, error_type: str, message: str, details: dict[str, Any] | None = None):
+    def log_configuration_error(
+        self, error_type: str, message: str, details: dict[str, Any] | None = None
+    ):
         """Log configuration validation errors."""
         event = {
             "event_type": "configuration_error",
@@ -89,7 +95,7 @@ class AuditLogger:
             "message": message,
             "session_id": current_session.get(),
             "timestamp": time.time(),
-            **(details or {})
+            **(details or {}),
         }
         self.logger.warning(json.dumps(event))
 
