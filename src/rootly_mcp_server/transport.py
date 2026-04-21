@@ -239,7 +239,6 @@ def _infer_mcp_mode_from_path(
     return ""
 
 
-
 class AuthCaptureMiddleware:
     """ASGI middleware that captures the Authorization header into a ContextVar.
 
