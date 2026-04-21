@@ -136,6 +136,7 @@ class TestScopedIncidentUpdateTool:
             strip_heavy_nested_data=lambda data: data,
             mcp_error=FakeMCPError(),
             generate_recommendation=_generate_recommendation,
+            enable_write_tools=True,
         )
         return mcp.tools, request
 
@@ -146,6 +147,23 @@ class TestScopedIncidentUpdateTool:
         assert "createIncident" in tools
         assert "updateIncident" in tools
         assert "getIncident" in tools
+
+    @pytest.mark.asyncio
+    async def test_write_tools_are_hidden_when_write_gating_is_disabled(self):
+        mcp = FakeMCP()
+        request = AsyncMock()
+        register_incident_tools(
+            mcp=mcp,
+            make_authenticated_request=request,
+            strip_heavy_nested_data=lambda data: data,
+            mcp_error=FakeMCPError(),
+            generate_recommendation=_generate_recommendation,
+            enable_write_tools=False,
+        )
+
+        assert "getIncident" in mcp.tools
+        assert "createIncident" not in mcp.tools
+        assert "updateIncident" not in mcp.tools
 
     @pytest.mark.asyncio
     async def test_create_incident_sends_only_allowed_fields(self):

@@ -17,7 +17,7 @@ import fastmcp.server.middleware as fastmcp_middleware
 import mcp.types as mt
 from fastmcp import FastMCP
 
-from . import legacy_server, payload_stripping, server_defaults, spec_transform, transport
+from . import audit, legacy_server, payload_stripping, server_defaults, spec_transform, transport
 from .exceptions import RootlyAuthenticationError
 from .mcp_error import MCPError
 from .security import mask_sensitive_data, sanitize_error_message
@@ -66,6 +66,7 @@ strip_heavy_nested_data = payload_stripping.strip_heavy_nested_data
 _generate_recommendation = server_defaults._generate_recommendation
 DEFAULT_ALLOWED_PATHS = server_defaults.DEFAULT_ALLOWED_PATHS
 DEFAULT_DELETE_ALLOWED_PATHS = server_defaults.DEFAULT_DELETE_ALLOWED_PATHS
+DEFAULT_WRITE_ALLOWED_PATHS = server_defaults.DEFAULT_WRITE_ALLOWED_PATHS
 RootlyMCPServer = legacy_server.RootlyMCPServer
 
 
@@ -375,6 +376,9 @@ def create_rootly_mcp_server(
     base_url: str | None = None,
     transport: str = "stdio",
     delete_allowed_paths: list[str] | None = None,
+    enable_write_tools: bool | None = None,
+    write_allowed_paths: list[str] | None = None,
+    enabled_tools: set[str] | None = None,
 ) -> FastMCP:
     """
     Create a Rootly MCP Server using FastMCP's OpenAPI integration.
@@ -384,10 +388,16 @@ def create_rootly_mcp_server(
         name: Name of the MCP server.
         allowed_paths: List of API paths to include. If None, includes default paths.
         delete_allowed_paths: Path templates where DELETE operations are exposed.
-            If None, uses DEFAULT_DELETE_ALLOWED_PATHS.
+            If None, destructive delete tools remain disabled by default.
         hosted: Whether the server is hosted (affects authentication).
         base_url: Base URL for Rootly API. If None, uses ROOTLY_BASE_URL env var or default.
         transport: Transport protocol (stdio, sse, or streamable-http).
+        enable_write_tools: Whether non-destructive write tools are exposed.
+            If None, uses ROOTLY_MCP_ENABLE_WRITE_TOOLS.
+        write_allowed_paths: Path templates where POST/PUT/PATCH operations are exposed
+            when write tools are enabled. If None, uses DEFAULT_WRITE_ALLOWED_PATHS.
+        enabled_tools: Optional allowlist of exact MCP tool names to expose.
+            If None, uses ROOTLY_MCP_ENABLED_TOOLS when set.
 
     Returns:
         A FastMCP server instance.
@@ -395,8 +405,14 @@ def create_rootly_mcp_server(
     # Set default allowed paths if none provided
     if allowed_paths is None:
         allowed_paths = DEFAULT_ALLOWED_PATHS
+    if enable_write_tools is None:
+        enable_write_tools = server_defaults.write_tools_enabled_from_env(default=hosted)
+    if enabled_tools is None:
+        enabled_tools = server_defaults.enabled_tools_from_env()
     if delete_allowed_paths is None:
-        delete_allowed_paths = DEFAULT_DELETE_ALLOWED_PATHS
+        delete_allowed_paths = []
+    if write_allowed_paths is None:
+        write_allowed_paths = DEFAULT_WRITE_ALLOWED_PATHS if enable_write_tools else []
 
     # Add /v1 prefix to paths if not present
     allowed_paths_v1 = [
@@ -404,6 +420,9 @@ def create_rootly_mcp_server(
     ]
     delete_allowed_paths_v1 = [
         f"/v1{path}" if not path.startswith("/v1") else path for path in delete_allowed_paths
+    ]
+    write_allowed_paths_v1 = [
+        f"/v1{path}" if not path.startswith("/v1") else path for path in write_allowed_paths
     ]
 
     logger.info(f"Creating Rootly MCP Server with allowed paths: {allowed_paths_v1}")
@@ -417,8 +436,72 @@ def create_rootly_mcp_server(
         swagger_spec,
         allowed_paths_v1,
         delete_allowed_paths=delete_allowed_paths_v1,
+        write_allowed_paths=write_allowed_paths_v1,
+        enable_write_tools=enable_write_tools,
+        enabled_operation_ids=enabled_tools,
     )
+
+    # Validate enabled tools against the filtered spec (after path filtering)
+    if enabled_tools:
+        valid_tools, invalid_tools = server_defaults.validate_tool_names(
+            enabled_tools, filtered_spec.get("paths", {})
+        )
+
+        if invalid_tools:
+            audit.audit.log_configuration_error(
+                "invalid_tool_names",
+                f"Invalid tool names in allowlist after filtering: {', '.join(invalid_tools)}",
+                {"invalid_tools": invalid_tools, "valid_tools": list(valid_tools)},
+            )
+            logger.warning(
+                "Invalid tool names in allowlist (will be ignored): %s. "
+                "Use --list-tools to see available options.",
+                ", ".join(sorted(invalid_tools)),
+            )
+
+        if not valid_tools and enabled_tools:
+            error_msg = "No valid tools found in allowlist after path filtering"
+            audit.audit.log_configuration_error(
+                "no_valid_tools", error_msg, {"requested_tools": list(enabled_tools)}
+            )
+            raise ValueError(error_msg)
+
+        # Log validation results
+        audit.audit.log_tool_validation(enabled_tools, valid_tools, invalid_tools)
+
+        # Update the filtered spec to only include valid tools
+        if valid_tools != enabled_tools:
+            filtered_spec = _filter_openapi_spec(
+                swagger_spec,
+                allowed_paths_v1,
+                delete_allowed_paths=delete_allowed_paths_v1,
+                write_allowed_paths=write_allowed_paths_v1,
+                enable_write_tools=enable_write_tools,
+                enabled_operation_ids=valid_tools,
+            )
     logger.info(f"Filtered spec to {len(filtered_spec.get('paths', {}))} allowed paths")
+
+    # Log server configuration for audit trail
+    config_info = {
+        "enable_write_tools": enable_write_tools,
+        "tool_count": len(filtered_spec.get("paths", {})),
+        "hosted": hosted,
+        "enabled_tools": list(enabled_tools) if enabled_tools else None,
+        "transport": transport,
+        "server_name": name,
+    }
+    audit.audit.log_server_start(config_info)
+
+    # Log permission changes
+    if enable_write_tools:
+        audit.audit.log_permission_change(
+            "write_tools_enabled",
+            {
+                "reason": "explicit_configuration",
+                "write_paths_count": len(write_allowed_paths_v1),
+                "hosted_mode": hosted,
+            },
+        )
 
     # Sanitize all parameter names in the filtered spec to be MCP-compliant
     parameter_mapping = sanitize_parameters_in_spec(filtered_spec)
@@ -559,6 +642,7 @@ def create_rootly_mcp_server(
         strip_heavy_nested_data=strip_heavy_nested_data,
         mcp_error=MCPError,
         generate_recommendation=_generate_recommendation,
+        enable_write_tools=enable_write_tools,
     )
 
     register_oncall_tools(
@@ -579,6 +663,20 @@ def create_rootly_mcp_server(
         make_authenticated_request=make_authenticated_request,
         mcp_error=MCPError,
     )
+
+    if enabled_tools is not None:
+        component_names = [
+            component.name
+            for component_key, component in mcp._local_provider._components.items()  # noqa: SLF001
+            if component_key.startswith("tool:") and getattr(component, "name", None)
+        ]
+        for tool_name in component_names:
+            if tool_name not in enabled_tools:
+                mcp.local_provider.remove_tool(tool_name)
+        logger.info(
+            "Applied MCP tool allowlist: %s",
+            ", ".join(sorted(enabled_tools)),
+        )
 
     # In hosted HTTP modes, configure ASGI middleware for auth token capture.
     # Callers retrieve via get_hosted_auth_middleware() and pass to server.run(middleware=...).

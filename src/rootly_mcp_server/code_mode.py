@@ -280,6 +280,8 @@ def create_rootly_codemode_server(
     allowed_paths: list[str] | None = None,
     hosted: bool = False,
     base_url: str | None = None,
+    enable_write_tools: bool | None = None,
+    enabled_tools: set[str] | None = None,
 ) -> FastMCP:
     """Create a Rootly MCP server instance wrapped with Code Mode."""
     mcp: FastMCP = create_rootly_mcp_server(
@@ -289,6 +291,8 @@ def create_rootly_codemode_server(
         hosted=hosted,
         base_url=base_url,
         transport="streamable-http",
+        enable_write_tools=enable_write_tools,
+        enabled_tools=enabled_tools,
     )
     mcp.add_transform(build_code_mode_transform())
     return mcp

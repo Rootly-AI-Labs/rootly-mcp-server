@@ -1715,7 +1715,7 @@ wheels = [
 
 [[package]]
 name = "rootly-mcp-server"
-version = "2.2.19"
+version = "2.2.20"
 source = { editable = "." }
 dependencies = [
     { name = "authlib" },
