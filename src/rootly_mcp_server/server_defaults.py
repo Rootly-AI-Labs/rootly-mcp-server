@@ -8,10 +8,12 @@ import os
 # Set up logger
 logger = logging.getLogger(__name__)
 
+
 # Environment variable constants
 class EnvVars:
     """Centralized environment variable names for type safety and IDE support."""
-    API_TOKEN = "ROOTLY_API_TOKEN"
+
+    API_TOKEN = "ROOTLY_API_TOKEN"  # nosec B105 - Environment variable name, not password
     BASE_URL = "ROOTLY_BASE_URL"
     SERVER_NAME = "ROOTLY_SERVER_NAME"
     HOSTED = "ROOTLY_HOSTED"
@@ -77,7 +79,9 @@ def write_tools_enabled_from_env(default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
-def validate_tool_names(enabled_tools: set[str], available_operations: dict) -> tuple[set[str], list[str]]:
+def validate_tool_names(
+    enabled_tools: set[str], available_operations: dict
+) -> tuple[set[str], list[str]]:
     """
     Validate tool names against available OpenAPI operations.
 

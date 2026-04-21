@@ -433,23 +433,26 @@ def create_rootly_mcp_server(
 
     # Validate enabled tools if provided
     if enabled_tools:
-        valid_tools, invalid_tools = server_defaults.validate_tool_names(enabled_tools, swagger_spec.get("paths", {}))
+        valid_tools, invalid_tools = server_defaults.validate_tool_names(
+            enabled_tools, swagger_spec.get("paths", {})
+        )
 
         if invalid_tools:
-            audit.audit.log_configuration_error("invalid_tool_names",
+            audit.audit.log_configuration_error(
+                "invalid_tool_names",
                 f"Invalid tool names in allowlist: {', '.join(invalid_tools)}",
-                {"invalid_tools": invalid_tools, "valid_tools": list(valid_tools)}
+                {"invalid_tools": invalid_tools, "valid_tools": list(valid_tools)},
             )
             logger.warning(
                 "Invalid tool names in allowlist (will be ignored): %s. "
                 "Use --list-tools to see available options.",
-                ", ".join(sorted(invalid_tools))
+                ", ".join(sorted(invalid_tools)),
             )
 
         if not valid_tools and enabled_tools:
             error_msg = "No valid tools found in allowlist"
-            audit.audit.log_configuration_error("no_valid_tools", error_msg,
-                {"requested_tools": list(enabled_tools)}
+            audit.audit.log_configuration_error(
+                "no_valid_tools", error_msg, {"requested_tools": list(enabled_tools)}
             )
             raise ValueError(error_msg)
 
@@ -477,17 +480,20 @@ def create_rootly_mcp_server(
         "hosted": hosted,
         "enabled_tools": list(enabled_tools) if enabled_tools else None,
         "transport": transport,
-        "server_name": name
+        "server_name": name,
     }
     audit.audit.log_server_start(config_info)
 
     # Log permission changes
     if enable_write_tools:
-        audit.audit.log_permission_change("write_tools_enabled", {
-            "reason": "explicit_configuration",
-            "write_paths_count": len(write_allowed_paths_v1),
-            "hosted_mode": hosted
-        })
+        audit.audit.log_permission_change(
+            "write_tools_enabled",
+            {
+                "reason": "explicit_configuration",
+                "write_paths_count": len(write_allowed_paths_v1),
+                "hosted_mode": hosted,
+            },
+        )
 
     # Sanitize all parameter names in the filtered spec to be MCP-compliant
     parameter_mapping = sanitize_parameters_in_spec(filtered_spec)
