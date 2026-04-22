@@ -5,6 +5,22 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.21] - Released 2026-04-22
+
+### Features
+
+- **Self-Hosted Tool Allowlists**: Added `ROOTLY_MCP_ENABLED_TOOLS` and `--enabled-tools` so self-hosted deployments can expose only an exact allowlist of MCP tool names
+- **Tool Discovery Command**: Added `--list-tools` so self-hosted users can print the effective tool names for their current configuration before narrowing the MCP surface
+- **Code Mode Alignment**: Applied the same allowlist behavior to the self-hosted Code Mode surface so discovery and enforcement stay consistent
+
+### Testing
+
+- **Live MCP Integration Coverage**: Added subprocess integration tests that boot the server, connect over streamable HTTP, call `tools/list`, and verify the live tool payload matches the configured allowlist
+
+### Documentation
+
+- **Self-Hosted Setup Guidance**: Documented the new allowlist and discovery workflow in the README, including smoke-test examples for read-only and write-enabled self-hosted setups
+
 ## [2.2.20] - Released 2026-04-21
 
 ### Security
