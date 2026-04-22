@@ -289,32 +289,38 @@ class TestServerCreation:
 class TestBundledIncidentFormFieldSelectionTools:
     """Verify the bundled swagger exposes the intended incident custom field tools."""
 
-    async def test_default_server_hides_generated_write_tools(self, mock_environment_token):
+    async def test_default_server_shows_generated_write_tools(self, mock_environment_token):
         server = create_rootly_mcp_server(hosted=False)
 
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
+        # Read tools should be present
         assert "listIncidentActionItems" in tool_names
         assert "listIncidentFormFieldSelections" in tool_names
         assert "getIncidentFormFieldSelection" in tool_names
 
-        assert "createIncidentActionItem" not in tool_names
-        assert "createIncidentFormFieldSelection" not in tool_names
-        assert "updateIncidentFormFieldSelection" not in tool_names
+        # Write tools should also be present by default
+        assert "createIncidentActionItem" in tool_names
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
+        # Delete operations are still restricted
         assert "deleteIncidentFormFieldSelection" not in tool_names
 
-    async def test_default_server_hides_workflow_write_tools(self, mock_environment_token):
+    async def test_default_server_shows_workflow_write_tools(self, mock_environment_token):
         server = create_rootly_mcp_server(hosted=False)
 
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
+        # Read tools should be present
         assert "listWorkflowTasks" in tool_names
         assert "getWorkflowTask" in tool_names
 
-        assert "createWorkflowTask" not in tool_names
-        assert "updateWorkflowTask" not in tool_names
+        # Write tools should also be present by default
+        assert "createWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+        # Delete operations are still restricted
         assert "deleteWorkflowTask" not in tool_names
 
     async def test_enable_write_tools_exposes_curated_generated_write_tools(
