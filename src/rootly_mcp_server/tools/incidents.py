@@ -82,7 +82,7 @@ def register_incident_tools(
     strip_heavy_nested_data: StripHeavyNestedData,
     mcp_error: Any,
     generate_recommendation: GenerateRecommendation,
-    enable_write_tools: bool = False,
+    enable_write_tools: bool = True,
 ) -> None:
     """Register incident search and recommendation tools on the MCP server."""
 

@@ -60,7 +60,7 @@ class AuditLogger:
         """Log server startup with security-relevant configuration."""
         event = {
             "event_type": "server_start",
-            "write_tools_enabled": config.get("enable_write_tools", False),
+            "write_tools_enabled": config.get("enable_write_tools", True),
             "tool_count": config.get("tool_count", 0),
             "hosted_mode": config.get("hosted", False),
             "allowlist_enabled": bool(config.get("enabled_tools")),

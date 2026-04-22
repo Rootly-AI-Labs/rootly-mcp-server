@@ -306,9 +306,7 @@ Choose one transport per server process:
 - **SSE** endpoint path: `/sse`
 - **Code Mode (experimental)** endpoint path: `/mcp-codemode` in hosted dual-transport mode
 
-By default, the self-hosted server exposes read tools only. To enable the curated non-destructive write surface, start the server with `--enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=true`.
-
-Hosted/remote deployments keep the existing write surface by default for backward compatibility.
+Both hosted and self-hosted deployments expose all tools by default (read and write) for consistency. To restrict to read-only tools, start the server with `--no-enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=false`.
 
 To expose only a specific subset of MCP tools on a self-hosted deployment, set `ROOTLY_MCP_ENABLED_TOOLS` (or pass `--enabled-tools`) with a comma-separated allowlist of exact tool names, for example `list_incidents,getIncident,get_server_version`.
 

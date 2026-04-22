@@ -116,9 +116,11 @@ def parse_args():
         help="Expose a separate hosted Code Mode endpoint (HTTP only)",
     )
     parser.add_argument(
-        "--enable-write-tools",
-        action="store_true",
-        help="Expose curated non-destructive write tools in addition to read tools",
+        "--no-enable-write-tools",
+        dest="enable_write_tools",
+        action="store_false",
+        default=True,
+        help="Disable write tools to expose read-only operations",
     )
     parser.add_argument(
         "--enabled-tools",
@@ -200,7 +202,7 @@ def get_server():
     hosted = os.getenv("ROOTLY_HOSTED", "false").lower() in ("true", "1", "yes")
     base_url = os.getenv("ROOTLY_BASE_URL")
     transport = normalize_transport_or_default(os.getenv("ROOTLY_TRANSPORT", "stdio"))
-    enable_write_tools = write_tools_enabled_from_env(default=hosted)
+    enable_write_tools = write_tools_enabled_from_env(default=True)
     enabled_tools = enabled_tools_from_env()
 
     # Parse allowed paths from environment variable
