@@ -163,8 +163,8 @@ Updated: {attributes.get("updated_at", "N/A")}"""
                             f"/v1/schedules/{schedule_id}/shifts",
                             params={
                                 "from": (now - timedelta(hours=1)).isoformat(),
-                                "to": (now + timedelta(hours=1)).isoformat()
-                            }
+                                "to": (now + timedelta(hours=1)).isoformat(),
+                            },
                         )
                         if shifts_response.status_code == 200:
                             shifts = shifts_response.json().get("data", [])
@@ -181,7 +181,9 @@ Updated: {attributes.get("updated_at", "N/A")}"""
                         else:
                             status_lines.append("  ❌ Could not fetch shifts")
 
-            status_lines.append(f"\n🕐 Updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
+            status_lines.append(
+                f"\n🕐 Updated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            )
 
             return {
                 "uri": "rootly://oncall-status",
