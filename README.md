@@ -406,7 +406,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **109 tools**.
+The default server configuration exposes **124 tools**.
 
 ### Custom Agentic Tools
 
@@ -521,6 +521,21 @@ listWorkflowFormFieldConditions
 listWorkflowGroups
 listWorkflows
 listWorkflowTasks
+updateEnvironment
+updateEscalationLevel
+updateEscalationPath
+updateEscalationPolicy
+updateFunctionality
+updateIncidentType
+updateOnCallRole
+updateOnCallShadow
+updateOverrideShift
+updateSchedule
+updateScheduleRotation
+updateService
+updateSeverity
+updateTeam
+updateWorkflow
 updateIncidentFormFieldSelection
 updateWorkflowTask
 ```

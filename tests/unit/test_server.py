@@ -405,8 +405,30 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "createIncidentActionItem" in tool_names
         assert "createIncidentFormFieldSelection" in tool_names
         assert "updateIncidentFormFieldSelection" in tool_names
+        assert "updateEnvironment" in tool_names
+        assert "updateEscalationLevel" in tool_names
+        assert "updateEscalationPath" in tool_names
+        assert "updateEscalationPolicy" in tool_names
+        assert "updateFunctionality" in tool_names
+        assert "updateIncidentType" in tool_names
+        assert "updateOnCallRole" in tool_names
+        assert "updateOnCallShadow" in tool_names
+        assert "updateOverrideShift" in tool_names
+        assert "updateSchedule" in tool_names
+        assert "updateScheduleRotation" in tool_names
+        assert "updateService" in tool_names
+        assert "updateSeverity" in tool_names
+        assert "updateTeam" in tool_names
+        assert "updateWorkflow" in tool_names
         assert "createWorkflowTask" in tool_names
         assert "updateWorkflowTask" in tool_names
+        assert "updateAlert" not in tool_names
+        assert "updateUser" not in tool_names
+        assert "deleteSchedule" not in tool_names
+        assert "deleteScheduleRotation" not in tool_names
+        assert "deleteEscalationPolicy" not in tool_names
+        assert "deleteEscalationPath" not in tool_names
+        assert "deleteEscalationLevel" not in tool_names
         assert "deleteWorkflowTask" not in tool_names
 
     async def test_hosted_server_keeps_curated_write_tools_by_default(self, mock_environment_token):

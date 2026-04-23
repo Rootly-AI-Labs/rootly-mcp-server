@@ -223,9 +223,26 @@ DEFAULT_ALLOWED_PATHS = [
 # write tools are explicitly enabled. This keeps the default surface focused on
 # read-only workflows and avoids exposing broader admin/config writes.
 DEFAULT_WRITE_ALLOWED_PATHS = [
+    "/alerts/{id}",
+    "/environments/{environment_id}",
+    "/escalation_levels/{escalation_level_id}",
+    "/escalation_paths/{escalation_policy_path_id}",
+    "/escalation_policies/{escalation_policy_id}",
+    "/functionalities/{functionality_id}",
     "/incidents/{incident_id}/action_items",
     "/incidents/{incident_id}/form_field_selections",
     "/incident_form_field_selections/{id}",
+    "/incident_types/{incident_type_id}",
+    "/on_call_roles/{on_call_role_id}",
+    "/on_call_shadows/{on_call_shadow_id}",
+    "/override_shifts/{override_shift_id}",
+    "/schedules/{schedule_id}",
+    "/schedule_rotations/{schedule_rotation_id}",
+    "/services/{service_id}",
+    "/severities/{severity_id}",
+    "/teams/{team_id}",
+    "/users/{user_id}",
+    "/workflows/{workflow_id}",
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
 ]
