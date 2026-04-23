@@ -277,10 +277,16 @@ def register_incident_tools(
         ] = 1,
     ) -> JsonDict:
         """
-        List incidents with structured filters for audit and review workflows.
+        🚨 List incidents with structured filters - ESSENTIAL for incident response.
+
+        WHEN TO USE:
+        • During incident response to check for related ongoing incidents
+        • For shift handoffs to review recent incidents by team/service
+        • For post-incident analysis to find patterns by severity/date range
+        • For audit workflows requiring specific filtering criteria
 
         Use this when you need date-range, team, service, severity, or status filters.
-        Prefer search_incidents only for lightweight free-text lookups.
+        For simple text searches, prefer search_incidents instead.
         """
         try:
             params, filters = await _prepare_incident_query_context(
@@ -822,7 +828,18 @@ def register_incident_tools(
             ),
         ] = "",
     ) -> JsonDict:
-        """Find similar incidents to help with context and resolution strategies. Provide either incident_id OR incident_description (e.g., 'website is down', 'database timeout errors'). Use status_filter to limit to specific incident statuses or leave empty for all incidents."""
+        """
+        🔍 Find historically similar incidents using ML similarity analysis - CRITICAL for incident response.
+
+        WHEN TO USE:
+        • EARLY in incident response to learn from past similar issues
+        • When you're unsure about root cause or resolution approach
+        • Before escalating to find if this is a known pattern
+        • For post-incident analysis to identify recurring issues
+
+        Provide either incident_id OR incident_description (e.g., 'website is down', 'database timeout errors').
+        Use status_filter to limit to specific incident statuses or leave empty for all incidents.
+        """
         try:
             target_incident: dict[str, Any] = {}
 
@@ -958,7 +975,17 @@ def register_incident_tools(
             ),
         ] = "resolved",
     ) -> JsonDict:
-        """Suggest solutions based on similar incidents. Provide either incident_id OR title/description. Defaults to resolved incidents for solution mining, but can search all statuses."""
+        """
+        💡 Get actionable solution recommendations from similar resolved incidents - KEY for incident response.
+
+        WHEN TO USE:
+        • AFTER find_related_incidents to get specific resolution steps
+        • When team is stuck on how to resolve the current incident
+        • To speed up incident resolution with proven solutions
+        • For training new responders on resolution patterns
+
+        Provide either incident_id OR title/description. Defaults to resolved incidents for solution mining.
+        """
         try:
             target_incident: dict[str, Any] = {}
 

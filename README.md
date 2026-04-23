@@ -372,6 +372,70 @@ docker run -p 8000:8000 \
   rootly-mcp-server
 ```
 
+## Workflow-Focused Tool Subsets
+
+With 150+ tools available, you may want to configure focused subsets for optimal AI agent performance. Use `ROOTLY_MCP_ENABLED_TOOLS` to activate specific workflows:
+
+### 🚨 Incident Response (25 tools)
+*Essential tools for emergency responders and incident commanders*
+
+```bash
+ROOTLY_MCP_ENABLED_TOOLS="listIncidents,getIncident,createIncident,updateIncident,search_incidents,find_related_incidents,suggest_solutions,createIncidentActionItem,listIncidentActionItems,updateIncidentFormFieldSelection,listTeams,getCurrentUser,listServices,listSeverities,getAlert,listAlerts,updateAlert,listEscalationPolicies,getEscalationPolicy,listOnCallRoles,listSchedules,getScheduleShifts,get_oncall_handoff_summary,get_shift_incidents,list_endpoints"
+```
+
+### 📅 On-Call Management (35 tools)  
+*For schedule coordinators and on-call managers*
+
+```bash
+ROOTLY_MCP_ENABLED_TOOLS="listSchedules,getSchedule,updateSchedule,getScheduleShifts,listShifts,list_shifts,createScheduleRotation,updateScheduleRotation,listScheduleRotations,getScheduleRotation,listScheduleRotationUsers,updateScheduleRotationUser,createOnCallShadow,updateOnCallShadow,listOnCallShadows,createOverrideShift,updateOverrideShift,listOverrideShifts,listOnCallRoles,updateOnCallRole,get_oncall_schedule_summary,get_oncall_shift_metrics,check_oncall_health_risk,check_responder_availability,create_override_recommendation,listTeams,getTeam,listUsers,getUser,getCurrentUser,listEscalationPolicies,updateEscalationPolicy,listEscalationPaths,updateEscalationPath,listEscalationLevels"
+```
+
+### 📊 Monitoring & Alerting (40 tools)
+*For platform teams setting up observability*
+
+```bash
+ROOTLY_MCP_ENABLED_TOOLS="listAlerts,getAlert,updateAlert,createAlertGroup,updateAlertGroup,listAlertGroups,createAlertRoutingRule,updateAlertRoutingRule,listAlertRoutingRules,listAlertEvents,getAlertEvent,updateAlertEvent,createHeartbeat,updateHeartbeat,listHeartbeats,getHeartbeat,createPulse,updatePulse,listPulses,getPulse,createDashboard,updateDashboard,listDashboards,getDashboard,createDashboardPanel,updateDashboardPanel,listStatusPages,getStatusPage,updateStatusPage,createStatusPageTemplate,updateStatusPageTemplate,listCommunicationsTemplates,updateCommunicationsTemplate,createLiveCallRouter,updateLiveCallRouter,listServices,listTeams,getCurrentUser,listEnvironments,listSeverities,list_endpoints"
+```
+
+### 📋 Post-Incident Analysis (30 tools)
+*For SREs doing retrospectives and process improvement*
+
+```bash
+ROOTLY_MCP_ENABLED_TOOLS="getIncident,updateIncident,find_related_incidents,suggest_solutions,listIncidentActionItems,createIncidentActionItem,updateIncidentFormFieldSelection,createPostIncidentReview,updatePostIncidentReview,listPostIncidentReviews,getPostIncidentReview,createRetrospectiveStep,updateRetrospectiveStep,listRetrospectiveSteps,createRetrospectiveProcess,updateRetrospectiveProcess,listRetrospectiveProcesses,createPlaybook,updatePlaybook,listPlaybooks,getPlaybook,createPlaybookTask,updatePlaybookTask,listCauses,getCause,updateCause,listIncidentTypes,getIncidentType,updateIncidentType,getCurrentUser"
+```
+
+### 📈 Analytics & Reporting (15 tools)
+*For leadership and metrics teams (read-only focus)*
+
+```bash
+ROOTLY_MCP_ENABLED_TOOLS="listIncidents,search_incidents,collect_incidents,listTeams,listServices,listSchedules,get_oncall_shift_metrics,get_shift_incidents,listDashboards,getDashboard,listAlerts,listHeartbeats,listPulses,getCurrentUser,list_endpoints"
+```
+
+### Multiple MCP Instances for Different Teams
+
+You can run multiple MCP instances with different tool subsets:
+
+```json
+{
+  "mcpServers": {
+    "rootly-incident-response": {
+      "command": "uvx", "args": ["--from", "rootly-mcp-server", "rootly-mcp-server"],
+      "env": {
+        "ROOTLY_API_TOKEN": "<token>",
+        "ROOTLY_MCP_ENABLED_TOOLS": "listIncidents,getIncident,createIncident,find_related_incidents,suggest_solutions..."
+      }
+    },
+    "rootly-oncall-management": {
+      "command": "uvx", "args": ["--from", "rootly-mcp-server", "rootly-mcp-server"],
+      "env": {
+        "ROOTLY_API_TOKEN": "<token>",
+        "ROOTLY_MCP_ENABLED_TOOLS": "listSchedules,updateSchedule,createOverrideShift,get_oncall_shift_metrics..."
+      }
+    }
+  }
+}
+```
+
 ### With uvx
 
 ```json
@@ -400,13 +464,13 @@ docker run -p 8000:8000 \
 - **Intelligent Incident Analysis**: Smart tools that analyze historical incident data
   - **`find_related_incidents`**: Uses TF-IDF similarity analysis to find historically similar incidents
   - **`suggest_solutions`**: Mines past incident resolutions to recommend actionable solutions
-- **MCP Resources**: Exposes incident and team data as structured resources for easy AI reference
+- **MCP Resources**: Exposes incidents, teams, on-call status, and workflow guides as structured resources for AI context
 - **Intelligent Pattern Recognition**: Automatically identifies services, error types, and resolution patterns
 - **On-Call Health Integration**: Detects workload health risk in scheduled responders
 
 ## Supported Tools
 
-The default server configuration exposes **124 tools**.
+The default server configuration exposes **150+ tools**.
 
 ### Custom Agentic Tools
 
@@ -540,6 +604,8 @@ updateIncidentFormFieldSelection
 updateWorkflowTask
 ```
 
+**Major Expansion**: This version includes 50+ new endpoints covering communications, dashboards, playbooks, post-incident reviews, monitoring, and advanced form management - while carefully excluding security-sensitive operations like API key management, user creation/deletion, role management, and webhook configuration.
+
 Delete operations remain disabled in the default tool surface.
 
 ## On-Call Health Integration
@@ -636,6 +702,18 @@ get_oncall_handoff_summary(
 Regional filtering shows only people on-call during business hours (9am-5pm) in the specified timezone.
 
 Returns: `schedules` with `current_oncall`, `next_oncall`, and `shift_incidents`
+
+### MCP Resources for Context
+
+AI agents can access these resources for situational awareness:
+
+- **`incident://{incident_id}`** - Detailed incident information for specific incidents
+- **`team://{team_id}`** - Team details including name, color, and metadata  
+- **`rootly://incidents`** - List of recent incidents for quick reference
+- **`rootly://oncall-status`** - Current on-call status across all schedules (critical for incident response)
+- **`rootly://workflow-guide`** - Step-by-step workflow guidance for common operations
+
+Example usage: *"Check the current on-call status"* → AI reads `rootly://oncall-status` resource
 
 ### Shift Incidents
 

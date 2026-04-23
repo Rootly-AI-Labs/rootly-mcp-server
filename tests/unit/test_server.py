@@ -352,8 +352,8 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "getAlertGroup" in tool_names
         assert "listAlertRoutingRules" in tool_names
         assert "getAlertRoutingRule" in tool_names
-        assert "listAlertSources" in tool_names
-        assert "getAlertSource" in tool_names
+        assert "listAlertsSources" in tool_names
+        assert "getAlertsSource" in tool_names
         assert "listAlertUrgencies" in tool_names
         assert "getAlertUrgency" in tool_names
         assert "listAllIncidentActionItems" in tool_names

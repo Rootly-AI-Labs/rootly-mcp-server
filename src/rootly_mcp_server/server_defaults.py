@@ -217,13 +217,124 @@ DEFAULT_ALLOWED_PATHS = [
     "/on_call_shadows/{on_call_shadow_id}",
     "/on_call_roles",
     "/on_call_roles/{on_call_role_id}",
+    # Communications management
+    "/communications_groups",
+    "/communications_groups/{id}",
+    "/communications_stages",
+    "/communications_stages/{id}",
+    "/communications_templates",
+    "/communications_templates/{id}",
+    "/communications_types",
+    "/communications_types/{id}",
+    # Dashboards and analytics
+    "/dashboards",
+    "/dashboards/{id}",
+    "/dashboard_panels",
+    "/dashboard_panels/{id}",
+    # Playbooks and runbooks
+    "/playbooks",
+    "/playbooks/{id}",
+    "/playbook_tasks",
+    "/playbook_tasks/{id}",
+    # Post-incident reviews and retrospectives
+    "/post_incident_reviews",
+    "/post_incident_reviews/{id}",
+    "/retrospective_processes",
+    "/retrospective_processes/{id}",
+    "/retrospective_process_groups",
+    "/retrospective_process_groups/{id}",
+    "/retrospective_steps",
+    "/retrospective_steps/{id}",
+    # Postmortem templates
+    "/postmortem_templates",
+    "/postmortem_templates/{id}",
+    # Heartbeat monitoring
+    "/heartbeats",
+    "/heartbeats/{id}",
+    # Live call routing
+    "/live_call_routers",
+    "/live_call_routers/{id}",
+    # Pulse checks and health monitoring
+    "/pulses",
+    "/pulses/{id}",
+    # Safe user operations (notification preferences only)
+    "/users/{user_id}/notification_rules",
+    "/user_notification_rules/{id}",
+    "/users/{user_id}/email_addresses",
+    "/user_email_addresses/{id}",
+    "/users/{user_id}/phone_numbers",
+    "/user_phone_numbers/{id}",
+    # Incident-related expanded endpoints
+    "/incidents/{incident_id}/events",
+    "/incident_events/{id}",
+    "/incidents/{incident_id}/custom_field_selections",
+    "/incident_custom_field_selections/{id}",
+    "/incidents/{incident_id}/postmortems",
+    "/incident_postmortems/{id}",
+    "/incidents/{incident_id}/retrospective_steps",
+    "/incident_retrospective_steps/{id}",
+    "/incidents/{incident_id}/status_pages",
+    "/incident_status_pages/{id}",
+    # Advanced form management
+    "/custom_fields",
+    "/custom_fields/{id}",
+    "/custom_field_options",
+    "/custom_field_options/{id}",
+    "/form_sets",
+    "/form_sets/{id}",
+    "/form_field_placements",
+    "/form_field_placements/{id}",
+    "/form_field_placement_conditions",
+    "/form_field_placement_conditions/{id}",
+    "/form_set_conditions",
+    "/form_set_conditions/{id}",
+    # Status page templates
+    "/status_page_templates",
+    "/status_page_templates/{id}",
+    # Sub-status management
+    "/sub_statuses",
+    "/sub_statuses/{id}",
+    "/incident_sub_statuses",
+    "/incident_sub_statuses/{id}",
+]
+
+# Paths explicitly excluded for security reasons - these contain sensitive operations
+# that should not be exposed through MCP even if they exist in the OpenAPI spec
+SECURITY_EXCLUDED_PATHS = [
+    # Authentication and API management
+    "/api_keys",
+    "/api_keys/{id}",
+    "/authorizations",
+    "/authorizations/{id}",
+    "/secrets",
+    "/secrets/{id}",
+    # User account management (creation/deletion should be done through proper IAM)
+    "/users/create",
+    "/users/{user_id}/delete",
+    # Role and permission management
+    "/roles",
+    "/roles/{id}",
+    "/permissions",
+    "/permissions/{id}",
+    "/incident_permission_sets",
+    "/incident_permission_set_booleans",
+    "/incident_permission_set_resources",
+    # Webhook and integration management (potential for data exfiltration)
+    "/webhooks_endpoints",
+    "/webhooks_endpoints/{id}",
+    # Financial and billing operations
+    "/on_call_pay_reports",
+    "/on_call_pay_reports/{id}",
+    # Global configuration that could affect system behavior
+    "/retrospective_configurations",
 ]
 
 # Non-destructive write operations are only exposed for these path families when
 # write tools are explicitly enabled. This keeps the default surface focused on
 # read-only workflows and avoids exposing broader admin/config writes.
 DEFAULT_WRITE_ALLOWED_PATHS = [
-    "/alerts/{id}",
+    # Core incident and infrastructure updates
+    "/alert_events/{id}",
     "/environments/{environment_id}",
     "/escalation_levels/{escalation_level_id}",
     "/escalation_paths/{escalation_policy_path_id}",
@@ -241,10 +352,51 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/services/{service_id}",
     "/severities/{severity_id}",
     "/teams/{team_id}",
-    "/users/{user_id}",
     "/workflows/{workflow_id}",
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
+    # Communications and templates
+    "/communications_groups/{id}",
+    "/communications_stages/{id}",
+    "/communications_templates/{id}",
+    "/communications_types/{id}",
+    # Dashboards and analytics
+    "/dashboards/{id}",
+    "/dashboard_panels/{id}",
+    # Playbooks and operational procedures
+    "/playbooks/{id}",
+    "/playbook_tasks/{id}",
+    # Post-incident and retrospectives
+    "/post_incident_reviews/{id}",
+    "/retrospective_processes/{id}",
+    "/retrospective_process_groups/{id}",
+    "/retrospective_steps/{id}",
+    "/postmortem_templates/{id}",
+    # Monitoring and health checks
+    "/heartbeats/{id}",
+    "/pulses/{id}",
+    "/live_call_routers/{id}",
+    # User notification preferences (safe user updates)
+    "/user_notification_rules/{id}",
+    "/user_email_addresses/{id}",
+    "/user_phone_numbers/{id}",
+    # Extended incident management
+    "/incident_events/{id}",
+    "/incident_custom_field_selections/{id}",
+    "/incident_postmortems/{id}",
+    "/incident_retrospective_steps/{id}",
+    "/incident_status_pages/{id}",
+    # Advanced form and field management
+    "/custom_fields/{id}",
+    "/custom_field_options/{id}",
+    "/form_sets/{id}",
+    "/form_field_placements/{id}",
+    "/form_field_placement_conditions/{id}",
+    "/form_set_conditions/{id}",
+    # Status and sub-status management
+    "/status_page_templates/{id}",
+    "/sub_statuses/{id}",
+    "/incident_sub_statuses/{id}",
 ]
 
 # DELETE operations are only exposed for these high-priority screenshot families.
