@@ -5,6 +5,47 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - Released 2026-04-23
+
+### Features
+
+- **Comprehensive API Coverage Expansion**: Expanded MCP tool surface from 124 to 150+ tools by updating to latest Rootly API specification with 95+ operations
+- **Enhanced Tool Discoverability**: Added contextual "WHEN TO USE" guidance to tool descriptions for improved AI agent decision-making
+- **Workflow-Focused Tool Subsets**: Introduced 5 predefined tool configurations optimized for specific use cases (Incident Response, Schedule Management, Monitoring Setup, Retrospectives, Administration)
+- **Operational Context Resources**: Added new MCP resources for real-time operational awareness:
+  - `rootly://oncall-status` - Live on-call status across teams for incident response context
+  - `rootly://workflow-guide` - Step-by-step workflow guidance for common Rootly operations
+- **Expanded Write Operations**: Added 54 non-destructive write operations while maintaining security boundaries
+- **API Path Coverage**: Increased DEFAULT_ALLOWED_PATHS from ~80 to 151 endpoints covering workflows, dashboards, communications, playbooks, and monitoring
+
+### Enhanced
+
+- **Tool Descriptions**: Enhanced incident and on-call tool descriptions with specific usage context and best practices
+- **Environment Configuration**: Improved environment-based tool subset configuration following MCP best practices
+- **Error Handling**: Robust error handling in new resource implementations with proper categorization
+
+### Documentation
+
+- **README Updates**: Updated tool counts, added workflow subset configurations, and enhanced setup guidance
+- **Configuration Examples**: Added 5 workflow-focused environment configurations for optimal AI performance
+- **API Coverage**: Documented comprehensive endpoint coverage while highlighting security exclusions
+
+### Security
+
+- **Maintained Boundaries**: Preserved security exclusions for sensitive operations (API keys, user management, webhooks, financial data)
+- **Curated Approach**: Continued read-first philosophy with carefully selected write operations
+- **Input Validation**: Maintained existing security controls and validation patterns
+
+### Testing
+
+- **Updated Assertions**: Fixed test assertions to match updated API operation names (listAlertsSources, getAlertsSource)
+- **Comprehensive Coverage**: All 382 tests passing with expanded API surface
+- **Security Validation**: Verified security boundaries remain intact with expanded tool set
+
+### Breaking Changes
+
+- None - Fully backward compatible with existing configurations and user workflows
+
 ## [2.2.24] - Released 2026-04-22
 
 ### Fixed
