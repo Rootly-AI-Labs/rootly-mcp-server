@@ -717,6 +717,9 @@ class AuthenticatedHTTPXClient:
         # there is no other interception point for auto-generated tools.
         response = self._maybe_strip_alert_response(method, url, response)
         response = self._maybe_strip_collection_response(method, url, response)
+        response = self._maybe_normalize_incident_form_field_selection_response(
+            method, url, response
+        )
 
         return response
 
@@ -738,6 +741,14 @@ class AuthenticatedHTTPXClient:
             return httpx.URL(str(url)).path
         except Exception:
             return str(url).split("?", 1)[0]
+
+    @staticmethod
+    def _is_incident_form_field_selection_endpoint(path: str) -> bool:
+        """Return whether a path targets incident form field selection resources."""
+        return (
+            path.startswith("/v1/incident_form_field_selections/")
+            or (path.startswith("/v1/incidents/") and path.endswith("/form_field_selections"))
+        )
 
     @staticmethod
     def _maybe_strip_alert_response(
@@ -781,6 +792,85 @@ class AuthenticatedHTTPXClient:
             response._content = json.dumps(stripped).encode()  # noqa: SLF001
         except Exception:
             logger.debug(f"Could not strip collection response for {url}", exc_info=True)
+        return response
+
+    @staticmethod
+    def _normalize_incident_form_field_selection_item(item: Any) -> Any:
+        """Prune redundant selected_* objects for text-like form field selections."""
+        if not isinstance(item, dict):
+            return item
+
+        attributes = item.get("attributes")
+        if not isinstance(attributes, dict):
+            return item
+
+        form_field = attributes.get("form_field")
+        if not isinstance(form_field, dict):
+            return item
+
+        if form_field.get("input_kind") not in {"text", "textarea"}:
+            return item
+
+        normalized_attributes = dict(attributes)
+        for key in (
+            "selected_groups",
+            "selected_options",
+            "selected_services",
+            "selected_functionalities",
+            "selected_catalog_entities",
+            "selected_users",
+            "selected_environments",
+            "selected_causes",
+            "selected_incident_types",
+        ):
+            normalized_attributes.pop(key, None)
+
+        normalized_item = dict(item)
+        normalized_item["attributes"] = normalized_attributes
+        return normalized_item
+
+    @classmethod
+    def _normalize_incident_form_field_selection_payload(cls, payload: Any) -> Any:
+        """Normalize form field selection payloads that may contain one item or many."""
+        if not isinstance(payload, dict):
+            return payload
+
+        data = payload.get("data")
+        if isinstance(data, dict):
+            normalized_payload = dict(payload)
+            normalized_payload["data"] = cls._normalize_incident_form_field_selection_item(data)
+            return normalized_payload
+
+        if isinstance(data, list):
+            normalized_payload = dict(payload)
+            normalized_payload["data"] = [
+                cls._normalize_incident_form_field_selection_item(item) for item in data
+            ]
+            return normalized_payload
+
+        return payload
+
+    @classmethod
+    def _maybe_normalize_incident_form_field_selection_response(
+        cls, method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Normalize noisy incident form field selection responses."""
+        if method.upper() not in {"GET", "POST", "PUT", "PATCH"} or not response.is_success:
+            return response
+
+        path = cls._path_for_url(url)
+        if not cls._is_incident_form_field_selection_endpoint(path):
+            return response
+
+        try:
+            payload = response.json()
+            normalized = cls._normalize_incident_form_field_selection_payload(payload)
+            response._content = json.dumps(normalized).encode()  # noqa: SLF001
+        except Exception:
+            logger.debug(
+                f"Could not normalize incident form field selection response for {url}",
+                exc_info=True,
+            )
         return response
 
     async def get(self, url: str, **kwargs):
@@ -858,6 +948,9 @@ class AuthenticatedHTTPXClient:
 
         response = self._maybe_strip_alert_response(request.method, str(request.url), response)
         response = self._maybe_strip_collection_response(request.method, str(request.url), response)
+        response = self._maybe_normalize_incident_form_field_selection_response(
+            request.method, str(request.url), response
+        )
         return response
 
     async def __aenter__(self):
