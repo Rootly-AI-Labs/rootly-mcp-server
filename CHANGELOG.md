@@ -5,6 +5,16 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.24] - Released 2026-04-22
+
+### Fixed
+
+- **Incident Form Field Selection Responses**: Normalized text and textarea form field selection responses so MCP clients receive the primary `value` plus `selected_*_ids`, without the redundant `selected_*` value objects repeated across unrelated resource types
+
+### Testing
+
+- **Response Normalization Coverage**: Added focused transport tests for single-item and list incident form field selection payloads, including a guard to leave select-style fields unchanged
+
 ## [2.2.23] - Released 2026-04-22
 
 ### Features
