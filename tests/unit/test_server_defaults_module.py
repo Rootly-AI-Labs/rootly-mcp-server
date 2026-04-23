@@ -17,8 +17,46 @@ class TestServerDefaultsModule:
         assert "/incidents/{incident_id}/alerts" in DEFAULT_ALLOWED_PATHS
         assert "/incidents/{incident_id}/form_field_selections" in DEFAULT_ALLOWED_PATHS
         assert "/incident_form_field_selections/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/alerts/{alert_id}/events" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_events/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/action_items" in DEFAULT_ALLOWED_PATHS
+        assert "/action_items/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/workflows/{workflow_id}/workflow_runs" in DEFAULT_ALLOWED_PATHS
+        assert "/workflow_groups" in DEFAULT_ALLOWED_PATHS
+        assert "/workflow_groups/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/workflows/{workflow_id}/form_field_conditions" in DEFAULT_ALLOWED_PATHS
+        assert "/workflow_form_field_conditions/{id}" in DEFAULT_ALLOWED_PATHS
         assert "/workflows/{workflow_id}/workflow_tasks" in DEFAULT_ALLOWED_PATHS
         assert "/workflow_tasks/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/status-pages" in DEFAULT_ALLOWED_PATHS
+        assert "/status-pages/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/status-pages/{status_page_id}/templates" in DEFAULT_ALLOWED_PATHS
+        assert "/templates/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/teams/{id}/incidents_chart" in DEFAULT_ALLOWED_PATHS
+        assert "/services/{id}/incidents_chart" in DEFAULT_ALLOWED_PATHS
+        assert "/services/{id}/uptime_chart" in DEFAULT_ALLOWED_PATHS
+        assert "/functionalities/{id}/incidents_chart" in DEFAULT_ALLOWED_PATHS
+        assert "/functionalities/{id}/uptime_chart" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_groups" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_groups/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_routing_rules" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_routing_rules/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_sources" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_sources/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_urgencies" in DEFAULT_ALLOWED_PATHS
+        assert "/alert_urgencies/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/custom_forms" in DEFAULT_ALLOWED_PATHS
+        assert "/custom_forms/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/form_fields" in DEFAULT_ALLOWED_PATHS
+        assert "/form_fields/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/form_fields/{form_field_id}/options" in DEFAULT_ALLOWED_PATHS
+        assert "/form_field_options/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/catalogs" in DEFAULT_ALLOWED_PATHS
+        assert "/catalogs/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/catalogs/{catalog_id}/entities" in DEFAULT_ALLOWED_PATHS
+        assert "/catalog_entities/{id}" in DEFAULT_ALLOWED_PATHS
+        assert "/causes" in DEFAULT_ALLOWED_PATHS
+        assert "/causes/{id}" in DEFAULT_ALLOWED_PATHS
         assert "/shifts" in DEFAULT_ALLOWED_PATHS
         assert "/on_call_roles" in DEFAULT_ALLOWED_PATHS
 
