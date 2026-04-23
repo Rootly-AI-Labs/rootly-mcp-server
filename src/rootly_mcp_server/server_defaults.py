@@ -131,8 +131,8 @@ DEFAULT_ALLOWED_PATHS = [
     "/incident_types",
     "/incident_types/{incident_type_id}",
     # Action items (all, by id, by incident)
-    "/incident_action_items",
-    "/incident_action_items/{incident_action_item_id}",
+    "/action_items",
+    "/action_items/{id}",
     "/incidents/{incident_id}/action_items",
     # Incident form field selections (used for incident custom field values)
     "/incidents/{incident_id}/form_field_selections",
@@ -142,9 +142,12 @@ DEFAULT_ALLOWED_PATHS = [
     "/workflows/{workflow_id}",
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
-    # Workflow runs
-    "/workflow_runs",
-    "/workflow_runs/{workflow_run_id}",
+    # Workflow reads
+    "/workflows/{workflow_id}/workflow_runs",
+    "/workflow_groups",
+    "/workflow_groups/{id}",
+    "/workflows/{workflow_id}/form_field_conditions",
+    "/workflow_form_field_conditions/{id}",
     # Environments
     "/environments",
     "/environments/{environment_id}",
@@ -153,8 +156,42 @@ DEFAULT_ALLOWED_PATHS = [
     "/users/{user_id}",
     "/users/me",
     # Status pages
-    "/status_pages",
-    "/status_pages/{status_page_id}",
+    "/status-pages",
+    "/status-pages/{id}",
+    "/status-pages/{status_page_id}/templates",
+    "/templates/{id}",
+    # Incident and uptime charts
+    "/teams/{id}/incidents_chart",
+    "/services/{id}/incidents_chart",
+    "/services/{id}/uptime_chart",
+    "/functionalities/{id}/incidents_chart",
+    "/functionalities/{id}/uptime_chart",
+    # Alert configuration visibility (read-only by default)
+    "/alert_groups",
+    "/alert_groups/{id}",
+    "/alert_routing_rules",
+    "/alert_routing_rules/{id}",
+    "/alert_sources",
+    "/alert_sources/{id}",
+    "/alert_urgencies",
+    "/alert_urgencies/{id}",
+    # Form metadata
+    "/custom_forms",
+    "/custom_forms/{id}",
+    "/form_fields",
+    "/form_fields/{id}",
+    "/form_fields/{form_field_id}/options",
+    "/form_field_options/{id}",
+    # Catalog and cause metadata
+    "/catalogs",
+    "/catalogs/{id}",
+    "/catalogs/{catalog_id}/entities",
+    "/catalog_entities/{id}",
+    "/causes",
+    "/causes/{id}",
+    # Alert events
+    "/alerts/{alert_id}/events",
+    "/alert_events/{id}",
     # On-call schedules and shifts
     "/schedules",
     "/schedules/{schedule_id}",

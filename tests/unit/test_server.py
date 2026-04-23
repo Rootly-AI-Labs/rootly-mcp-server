@@ -323,6 +323,77 @@ class TestBundledIncidentFormFieldSelectionTools:
         # Delete operations are still restricted
         assert "deleteWorkflowTask" not in tool_names
 
+    async def test_default_server_shows_additional_read_tools(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        # Workflow observability reads
+        assert "ListWorkflowRuns" in tool_names
+        assert "listWorkflowGroups" in tool_names
+        assert "getWorkflowGroup" in tool_names
+        assert "listWorkflowFormFieldConditions" in tool_names
+        assert "getWorkflowFormFieldCondition" in tool_names
+
+        # Alert, status page, form metadata, and catalog reads
+        assert "listAlertEvents" in tool_names
+        assert "getAlertEvent" in tool_names
+        assert "listStatusPages" in tool_names
+        assert "getStatusPage" in tool_names
+        assert "listStatusPageTemplates" in tool_names
+        assert "getStatusPageTemplate" in tool_names
+        assert "getTeamIncidentsChart" in tool_names
+        assert "getServiceIncidentsChart" in tool_names
+        assert "getServiceUptimeChart" in tool_names
+        assert "getFunctionalityIncidentsChart" in tool_names
+        assert "getFunctionalityUptimeChart" in tool_names
+        assert "listAlertGroups" in tool_names
+        assert "getAlertGroup" in tool_names
+        assert "listAlertRoutingRules" in tool_names
+        assert "getAlertRoutingRule" in tool_names
+        assert "listAlertSources" in tool_names
+        assert "getAlertSource" in tool_names
+        assert "listAlertUrgencies" in tool_names
+        assert "getAlertUrgency" in tool_names
+        assert "listAllIncidentActionItems" in tool_names
+        assert "getIncidentActionItems" in tool_names
+        assert "listCustomForms" in tool_names
+        assert "getCustomForm" in tool_names
+        assert "listFormFields" in tool_names
+        assert "getFormField" in tool_names
+        assert "listFormFieldOptions" in tool_names
+        assert "getFormFieldOption" in tool_names
+        assert "listCatalogs" in tool_names
+        assert "getCatalog" in tool_names
+        assert "listCatalogEntities" in tool_names
+        assert "getCatalogEntity" in tool_names
+        assert "listCauses" in tool_names
+        assert "getCause" in tool_names
+
+        # Keep broader writes on these families disabled
+        assert "createWorkflowRun" not in tool_names
+        assert "createWorkflowGroup" not in tool_names
+        assert "updateWorkflowGroup" not in tool_names
+        assert "createStatusPage" not in tool_names
+        assert "updateStatusPage" not in tool_names
+        assert "createStatusPageTemplate" not in tool_names
+        assert "updateStatusPageTemplate" not in tool_names
+        assert "createAlertGroup" not in tool_names
+        assert "updateAlertGroup" not in tool_names
+        assert "createAlertRoutingRule" not in tool_names
+        assert "updateAlertRoutingRule" not in tool_names
+        assert "createAlertSource" not in tool_names
+        assert "updateAlertSource" not in tool_names
+        assert "createAlertUrgency" not in tool_names
+        assert "updateAlertUrgency" not in tool_names
+        assert "createCustomForm" not in tool_names
+        assert "updateCustomForm" not in tool_names
+        assert "createFormField" not in tool_names
+        assert "updateFormField" not in tool_names
+        assert "createCatalog" not in tool_names
+        assert "updateCatalog" not in tool_names
+
     async def test_enable_write_tools_exposes_curated_generated_write_tools(
         self, mock_environment_token
     ):

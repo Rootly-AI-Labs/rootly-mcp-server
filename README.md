@@ -306,7 +306,7 @@ Choose one transport per server process:
 - **SSE** endpoint path: `/sse`
 - **Code Mode (experimental)** endpoint path: `/mcp-codemode` in hosted dual-transport mode
 
-Both hosted and self-hosted deployments expose all tools by default (read and write) for consistency. To restrict to read-only tools, start the server with `--no-enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=false`.
+Both hosted and self-hosted deployments expose the same curated tool surface by default, including the default write-enabled tools. To restrict that surface to read-only tools, start the server with `--no-enable-write-tools` or set `ROOTLY_MCP_ENABLE_WRITE_TOOLS=false`.
 
 To expose only a specific subset of MCP tools on a self-hosted deployment, set `ROOTLY_MCP_ENABLED_TOOLS` (or pass `--enabled-tools`) with a comma-separated allowlist of exact tool names, for example `list_incidents,getIncident,get_server_version`.
 
@@ -406,7 +406,7 @@ docker run -p 8000:8000 \
 
 ## Supported Tools
 
-The default server configuration exposes **110 tools**.
+The default server configuration exposes **109 tools**.
 
 ### Custom Agentic Tools
 
@@ -433,41 +433,31 @@ The default server configuration exposes **110 tools**.
 ### OpenAPI-Generated Tools
 
 ```text
-attachAlert
-createAlert
-createEnvironment
-createEscalationLevel
-createEscalationLevelPaths
-createEscalationPath
-createEscalationPolicy
-createFunctionality
+ListWorkflowRuns
 createIncidentActionItem
 createIncidentFormFieldSelection
-createIncidentType
-createOnCallRole
-createOnCallShadow
-createOverrideShift
-createSchedule
-createScheduleRotation
-createScheduleRotationActiveDay
-createScheduleRotationUser
-createService
-createSeverity
-createTeam
-createWorkflow
 createWorkflowTask
-deleteEscalationLevel
-deleteEscalationPath
-deleteEscalationPolicy
-deleteSchedule
-deleteScheduleRotation
 getAlert
+getAlertEvent
+getAlertGroup
+getAlertRoutingRule
+getAlertSource
+getAlertUrgency
+getCatalog
+getCatalogEntity
+getCause
 getCurrentUser
+getCustomForm
 getEnvironment
 getEscalationLevel
 getEscalationPath
 getEscalationPolicy
+getFormField
+getFormFieldOption
 getFunctionality
+getFunctionalityIncidentsChart
+getFunctionalityUptimeChart
+getIncidentActionItems
 getIncidentFormFieldSelection
 getIncidentType
 getOnCallRole
@@ -477,22 +467,42 @@ getSchedule
 getScheduleRotation
 getScheduleShifts
 getService
+getServiceIncidentsChart
+getServiceUptimeChart
 getSeverity
+getStatusPage
+getStatusPageTemplate
 getTeam
+getTeamIncidentsChart
 getUser
 getWorkflow
+getWorkflowFormFieldCondition
+getWorkflowGroup
 getWorkflowTask
+listAlertEvents
+listAlertGroups
+listAlertRoutingRules
+listAlertSources
+listAlertUrgencies
 listAlerts
+listAllIncidentActionItems
+listCatalogEntities
+listCatalogs
+listCauses
+listCustomForms
 listEnvironments
 listEscalationLevels
 listEscalationLevelsPaths
 listEscalationPaths
 listEscalationPolicies
+listFormFieldOptions
+listFormFields
 listFunctionalities
 listIncidentActionItems
 listIncidentAlerts
 listIncidentFormFieldSelections
 listIncident_Types
+listIncidents
 listOnCallRoles
 listOnCallShadows
 listOverrideShifts
@@ -503,33 +513,19 @@ listSchedules
 listServices
 listSeverities
 listShifts
+listStatusPageTemplates
+listStatusPages
 listTeams
 listUsers
+listWorkflowFormFieldConditions
+listWorkflowGroups
 listWorkflows
 listWorkflowTasks
-updateAlert
-updateEnvironment
-updateEscalationLevel
-updateEscalationPath
-updateEscalationPolicy
-updateFunctionality
 updateIncidentFormFieldSelection
-updateIncidentType
-updateOnCallRole
-updateOnCallShadow
-updateOverrideShift
-updateSchedule
-updateScheduleRotation
-updateService
-updateSeverity
-updateTeam
-updateUser
-updateWorkflow
 updateWorkflowTask
 ```
 
-Delete operations are intentionally scoped to screenshot coverage paths:
-`deleteSchedule`, `deleteScheduleRotation`, `deleteEscalationPolicy`, `deleteEscalationPath`, `deleteEscalationLevel`.
+Delete operations remain disabled in the default tool surface.
 
 ## On-Call Health Integration
 
