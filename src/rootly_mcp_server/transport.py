@@ -745,9 +745,8 @@ class AuthenticatedHTTPXClient:
     @staticmethod
     def _is_incident_form_field_selection_endpoint(path: str) -> bool:
         """Return whether a path targets incident form field selection resources."""
-        return (
-            path.startswith("/v1/incident_form_field_selections/")
-            or (path.startswith("/v1/incidents/") and path.endswith("/form_field_selections"))
+        return path.startswith("/v1/incident_form_field_selections/") or (
+            path.startswith("/v1/incidents/") and path.endswith("/form_field_selections")
         )
 
     @staticmethod

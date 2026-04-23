@@ -306,8 +306,10 @@ class TestTransportModule:
             }
         }
 
-        normalized = transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
-            payload
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
         )
         attributes = normalized["data"]["attributes"]
 
@@ -336,8 +338,10 @@ class TestTransportModule:
             }
         }
 
-        normalized = transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
-            payload
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
         )
 
         assert normalized == payload
@@ -367,8 +371,10 @@ class TestTransportModule:
             ]
         }
 
-        normalized = transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
-            payload
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
         )
 
         assert "selected_groups" not in normalized["data"][0]["attributes"]
@@ -394,10 +400,8 @@ class TestTransportModule:
             },
         )
 
-        result = (
-            transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
-                "PUT", "/v1/incident_form_field_selections/selection-5", response
-            )
+        result = transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
+            "PUT", "/v1/incident_form_field_selections/selection-5", response
         )
         parsed = result.json()
 
@@ -424,10 +428,8 @@ class TestTransportModule:
             },
         )
 
-        result = (
-            transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
-                "GET", "/v1/incidents/inc-123/form_field_selections", response
-            )
+        result = transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
+            "GET", "/v1/incidents/inc-123/form_field_selections", response
         )
         parsed = result.json()
 
