@@ -5,6 +5,16 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - Released 2026-04-23
+
+### Fixed
+
+- **Generated Write Payload Forwarding**: Normalized generated OpenAPI write-tool payloads to unwrap top-level `body` envelopes before forwarding to the Rootly API, fixing failures such as `createWorkflow` returning `Invalid payload ({data: "Expected hash"})`
+
+### Testing
+
+- **Request-Path Regression Coverage**: Added transport regression tests that assert write requests forward unwrapped JSON payloads and preserve already-correct non-envelope payloads
+
 ## [2.3.1] - Released 2026-04-23
 
 ### Fixed
