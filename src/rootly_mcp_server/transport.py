@@ -794,7 +794,7 @@ class AuthenticatedHTTPXClient:
             else:
                 body = {"original_response": body, "_plan_gating_hint": hint}
             response._content = json.dumps(body).encode()  # noqa: SLF001
-        except Exception:
+        except Exception:  # nosec B110 - Safe fallback; annotation is best-effort
             pass
         return response
 
