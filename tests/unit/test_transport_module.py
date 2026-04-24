@@ -523,6 +523,54 @@ class TestTransportModule:
         assert error_context["upstream_path"] == "/v1/alerts"
         assert error_context["upstream_log_level"] == "error"
 
+    @pytest.mark.asyncio
+    async def test_authenticated_client_unwraps_body_envelope_on_write_requests(self):
+        response = httpx.Response(
+            200,
+            request=httpx.Request("POST", "https://api.rootly.com/v1/workflows"),
+            content=b'{"data":{"id":"wf-1"}}',
+        )
+
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+            client.client.request = AsyncMock(return_value=response)
+
+            await client.request(
+                "POST",
+                "/v1/workflows",
+                json={"body": {"genius_workflow": {"name": "MCP verification workflow"}}},
+            )
+
+            _, kwargs = client.client.request.call_args
+            assert kwargs["json"] == {"genius_workflow": {"name": "MCP verification workflow"}}
+
+    @pytest.mark.asyncio
+    async def test_authenticated_client_preserves_non_envelope_payload_on_update_requests(self):
+        response = httpx.Response(
+            200,
+            request=httpx.Request("PATCH", "https://api.rootly.com/v1/workflows/wf-1"),
+            content=b'{"data":{"id":"wf-1"}}',
+        )
+
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+            client.client.request = AsyncMock(return_value=response)
+
+            await client.request(
+                "PATCH",
+                "/v1/workflows/wf-1",
+                json={"data": {"type": "workflows", "attributes": {"name": "Updated"}}},
+            )
+
+            _, kwargs = client.client.request.call_args
+            assert kwargs["json"] == {
+                "data": {"type": "workflows", "attributes": {"name": "Updated"}}
+            }
+
     def test_sanitize_log_excerpt_redacts_tokens_and_paths(self):
         excerpt = transport._sanitize_log_excerpt(
             'Bearer rootly_1234567890 File "/Users/spencercheng/app.py" failed'
