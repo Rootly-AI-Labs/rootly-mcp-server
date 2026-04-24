@@ -5,6 +5,19 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - Released 2026-04-23
+
+### Fixed
+
+- **Create Operations Restored**: Restored missing create operations for workflows, schedules, and configuration resources by expanding `DEFAULT_WRITE_ALLOWED_PATHS` to include collection/base paths (not only `/{id}` update paths)
+- **Write Surface Completeness**: Re-enabled create + update parity across key families including workflows, workflow groups, schedules, escalation policies, services, teams, environments, dashboards, playbooks, monitoring, retrospectives, communications, causes, and catalogs
+- **Test Accuracy**: Corrected alert source tool-name assertions in unit tests (`createAlertSource` / `updateAlertSource`) to prevent false confidence
+
+### Notes
+
+- `createWorkflow` remains the correct tool name (singular), not `createWorkflows`
+- Security exclusions for sensitive families remain unchanged
+
 ## [2.3.0] - Released 2026-04-23
 
 ### Features
