@@ -378,8 +378,8 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "updateAlertGroup" not in tool_names
         assert "createAlertRoutingRule" not in tool_names
         assert "updateAlertRoutingRule" not in tool_names
-        assert "createAlertsSource" not in tool_names
-        assert "updateAlertsSource" not in tool_names
+        assert "createAlertSource" not in tool_names
+        assert "updateAlertSource" not in tool_names
         assert "createAlertUrgency" not in tool_names
         assert "updateAlertUrgency" not in tool_names
         # Custom form/field creation excluded (schema-level configuration)
