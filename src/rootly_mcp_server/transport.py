@@ -651,6 +651,8 @@ class AuthenticatedHTTPXClient:
         # Transform query parameters
         if "params" in kwargs:
             kwargs["params"] = self._transform_params(kwargs["params"])
+        if "json" in kwargs:
+            kwargs["json"] = self._normalize_request_json_payload(method, kwargs["json"])
 
         # Log incoming headers for debugging (before transformation)
         incoming_headers = kwargs.get("headers", {})
@@ -722,6 +724,23 @@ class AuthenticatedHTTPXClient:
         )
 
         return response
+
+    @staticmethod
+    def _normalize_request_json_payload(method: str, payload: Any) -> Any:
+        """Normalize JSON payloads forwarded by generated tools.
+
+        Some generated write tools expose a top-level `body` parameter, which can
+        result in JSON payloads of shape `{"body": {...}}`. Rootly API write
+        endpoints expect the inner object as the actual request body.
+        """
+        if method.upper() not in {"POST", "PUT", "PATCH"}:
+            return payload
+        if not isinstance(payload, dict):
+            return payload
+        body = payload.get("body")
+        if len(payload) == 1 and isinstance(body, dict):
+            return body
+        return payload
 
     @staticmethod
     def _is_alert_endpoint(url: str) -> bool:

@@ -560,6 +560,29 @@ class TestTransportModule:
         assert result["data"][0]["relationships"]["alerts"] == {"count": 2}
         assert "included" not in result
 
+    def test_normalize_request_json_payload_unwraps_body_for_write_methods(self):
+        payload = {"body": {"genius_workflow": {"name": "workflow-name"}}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload("POST", payload)
+
+        assert result == {"genius_workflow": {"name": "workflow-name"}}
+
+    def test_normalize_request_json_payload_does_not_unwrap_for_get(self):
+        payload = {"body": {"query": "database timeout"}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload("GET", payload)
+
+        assert result == payload
+
+    def test_normalize_request_json_payload_keeps_non_envelope_dict(self):
+        payload = {"data": {"type": "incidents"}, "body": {"ignored": True}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload(
+            "PATCH", payload
+        )
+
+        assert result == payload
+
     def test_strip_heavy_user_data_keeps_profile_essentials(self):
         data = {
             "data": [
