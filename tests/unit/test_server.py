@@ -371,28 +371,22 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "listCauses" in tool_names
         assert "getCause" in tool_names
 
-        # Keep broader writes on these families disabled
+        # Workflow creates now enabled, but workflow runs remain excluded
         assert "createWorkflowRun" not in tool_names
-        assert "createWorkflowGroup" not in tool_names
-        assert "updateWorkflowGroup" not in tool_names
-        assert "createStatusPage" not in tool_names
-        assert "updateStatusPage" not in tool_names
-        assert "createStatusPageTemplate" not in tool_names
-        assert "updateStatusPageTemplate" not in tool_names
+        # Alert configuration writes remain excluded (connects to external systems)
         assert "createAlertGroup" not in tool_names
         assert "updateAlertGroup" not in tool_names
         assert "createAlertRoutingRule" not in tool_names
         assert "updateAlertRoutingRule" not in tool_names
-        assert "createAlertSource" not in tool_names
-        assert "updateAlertSource" not in tool_names
+        assert "createAlertsSource" not in tool_names
+        assert "updateAlertsSource" not in tool_names
         assert "createAlertUrgency" not in tool_names
         assert "updateAlertUrgency" not in tool_names
+        # Custom form/field creation excluded (schema-level configuration)
         assert "createCustomForm" not in tool_names
         assert "updateCustomForm" not in tool_names
         assert "createFormField" not in tool_names
         assert "updateFormField" not in tool_names
-        assert "createCatalog" not in tool_names
-        assert "updateCatalog" not in tool_names
 
     async def test_enable_write_tools_exposes_curated_generated_write_tools(
         self, mock_environment_token

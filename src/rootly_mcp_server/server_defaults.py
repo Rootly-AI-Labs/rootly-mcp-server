@@ -333,52 +333,98 @@ SECURITY_EXCLUDED_PATHS = [
 # write tools are explicitly enabled. This keeps the default surface focused on
 # read-only workflows and avoids exposing broader admin/config writes.
 DEFAULT_WRITE_ALLOWED_PATHS = [
-    # Core incident and infrastructure updates
-    "/alert_events/{id}",
+    # Core incident and infrastructure - create + update
+    "/environments",
     "/environments/{environment_id}",
-    "/escalation_levels/{escalation_level_id}",
-    "/escalation_paths/{escalation_policy_path_id}",
-    "/escalation_policies/{escalation_policy_id}",
+    "/functionalities",
     "/functionalities/{functionality_id}",
+    "/incident_types",
+    "/incident_types/{incident_type_id}",
+    "/services",
+    "/services/{service_id}",
+    "/severities",
+    "/severities/{severity_id}",
+    "/teams",
+    "/teams/{team_id}",
+    # Incident mutations
+    "/alert_events/{id}",
     "/incidents/{incident_id}/action_items",
     "/incidents/{incident_id}/form_field_selections",
     "/incident_form_field_selections/{id}",
-    "/incident_types/{incident_type_id}",
-    "/on_call_roles/{on_call_role_id}",
-    "/on_call_shadows/{on_call_shadow_id}",
-    "/override_shifts/{override_shift_id}",
+    # On-call schedules - create + update
+    "/schedules",
     "/schedules/{schedule_id}",
+    "/schedules/{schedule_id}/schedule_rotations",
     "/schedule_rotations/{schedule_rotation_id}",
-    "/services/{service_id}",
-    "/severities/{severity_id}",
-    "/teams/{team_id}",
+    "/schedules/{schedule_id}/override_shifts",
+    "/override_shifts/{override_shift_id}",
+    "/schedules/{schedule_id}/on_call_shadows",
+    "/on_call_shadows/{on_call_shadow_id}",
+    "/on_call_roles",
+    "/on_call_roles/{on_call_role_id}",
+    # Escalation policies - create + update
+    "/escalation_policies",
+    "/escalation_policies/{escalation_policy_id}",
+    "/escalation_policies/{escalation_policy_id}/escalation_paths",
+    "/escalation_paths/{escalation_policy_path_id}",
+    "/escalation_paths/{escalation_policy_path_id}/escalation_levels",
+    "/escalation_levels/{escalation_level_id}",
+    # Workflows - create + update
+    "/workflows",
     "/workflows/{workflow_id}",
+    "/workflow_groups",
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
-    # Communications and templates
-    "/communications_groups/{id}",
-    "/communications_stages/{id}",
-    "/communications_templates/{id}",
-    "/communications_types/{id}",
-    # Dashboards and analytics
+    "/workflows/{workflow_id}/form_field_conditions",
+    # Dashboards - create + update
+    "/dashboards",
     "/dashboards/{id}",
+    "/dashboards/{dashboard_id}/panels",
     "/dashboard_panels/{id}",
-    # Playbooks and operational procedures
+    # Playbooks - create + update
+    "/playbooks",
     "/playbooks/{id}",
+    "/playbooks/{playbook_id}/playbook_tasks",
     "/playbook_tasks/{id}",
-    # Post-incident and retrospectives
+    # Monitoring - create + update
+    "/heartbeats",
+    "/heartbeats/{id}",
+    "/pulses",
+    "/pulses/{id}",
+    "/live_call_routers",
+    "/live_call_routers/{id}",
+    # Post-incident and retrospectives - create + update
     "/post_incident_reviews/{id}",
+    "/retrospective_processes",
     "/retrospective_processes/{id}",
+    "/retrospective_processes/{retrospective_process_id}/groups",
     "/retrospective_process_groups/{id}",
+    "/retrospective_processes/{retrospective_process_id}/retrospective_steps",
     "/retrospective_steps/{id}",
     "/postmortem_templates/{id}",
-    # Monitoring and health checks
-    "/heartbeats/{id}",
-    "/pulses/{id}",
-    "/live_call_routers/{id}",
-    # User notification preferences (safe user updates)
+    # Communications - create + update
+    "/communications_groups",
+    "/communications_groups/{id}",
+    "/communications_stages",
+    "/communications_stages/{id}",
+    "/communications_templates",
+    "/communications_templates/{id}",
+    "/communications_types",
+    "/communications_types/{id}",
+    # Causes and catalog - create + update
+    "/causes",
+    "/catalogs",
+    "/catalogs/{catalog_id}/entities",
+    # Sub-statuses - create + update
+    "/sub_statuses",
+    "/sub_statuses/{id}",
+    "/incident_sub_statuses/{id}",
+    # User notification preferences - create + update
+    "/users/{user_id}/notification_rules",
     "/user_notification_rules/{id}",
+    "/users/{user_id}/email_addresses",
     "/user_email_addresses/{id}",
+    "/users/{user_id}/phone_numbers",
     "/user_phone_numbers/{id}",
     # Extended incident management
     "/incident_events/{id}",
@@ -386,17 +432,17 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/incident_postmortems/{id}",
     "/incident_retrospective_steps/{id}",
     "/incident_status_pages/{id}",
-    # Advanced form and field management
+    # Form and field management - create + update
+    "/custom_fields",
     "/custom_fields/{id}",
     "/custom_field_options/{id}",
+    "/form_sets",
     "/form_sets/{id}",
     "/form_field_placements/{id}",
     "/form_field_placement_conditions/{id}",
     "/form_set_conditions/{id}",
-    # Status and sub-status management
+    # Status page templates
     "/status_page_templates/{id}",
-    "/sub_statuses/{id}",
-    "/incident_sub_statuses/{id}",
 ]
 
 # DELETE operations are only exposed for these high-priority screenshot families.
