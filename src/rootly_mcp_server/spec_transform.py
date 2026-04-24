@@ -493,22 +493,30 @@ def _filter_openapi_spec(
                             }
                         )
 
-    # Also clean up any remaining broken references in components
+    # Also clean up any remaining broken references in components.
+    # Schemas with broken $refs are patched in-place (broken refs replaced with generic objects)
+    # rather than removed, so that write tools like createWorkflow retain their field structure.
     if "components" in filtered_spec and "schemas" in filtered_spec["components"]:
         schemas = filtered_spec["components"]["schemas"]
-        # Remove or fix any schemas that reference missing components
         schemas_to_remove = []
         for schema_name, schema_def in schemas.items():
             if isinstance(schema_def, dict) and _has_broken_references(schema_def):
-                schemas_to_remove.append(schema_name)
+                patched = _patch_broken_refs(schema_def)
+                if _has_broken_references(patched):
+                    # Still broken after patching — remove it entirely
+                    schemas_to_remove.append(schema_name)
+                else:
+                    schemas[schema_name] = patched
+                    logger.debug(f"Patched broken references in schema: {schema_name}")
 
         for schema_name in schemas_to_remove:
             logger.debug(f"Removing schema with broken references: {schema_name}")
             del schemas[schema_name]
 
-    # Clean up any operation-level references to removed schemas
-    removed_schemas = set()
+    # Clean up operation-level references to schemas that were fully removed (not just patched)
+    removed_schemas: set[str] = set()
     if "components" in filtered_spec and "schemas" in filtered_spec["components"]:
+        existing = set(filtered_spec["components"]["schemas"].keys())
         removed_schemas = {
             "new_workflow",
             "update_workflow",
@@ -520,7 +528,7 @@ def _filter_openapi_spec(
             "update_workflow_task",
             "workflow_task_response",
             "workflow_task_list",
-        }
+        } - existing  # Only replace refs to schemas that were actually removed
 
     for path, path_item in filtered_spec.get("paths", {}).items():
         for method, operation in path_item.items():
@@ -747,3 +755,26 @@ def _has_broken_references(schema_def: dict[str, Any]) -> bool:
                     return True
 
     return False
+
+
+def _patch_broken_refs(schema_def: dict[str, Any]) -> dict[str, Any]:
+    """Recursively replace broken $refs with a generic object schema.
+
+    This preserves the parent schema's field structure (e.g. new_workflow keeps
+    name/description/etc.) while neutralising unresolvable nested references like
+    incident_trigger_params.
+    """
+    if "$ref" in schema_def and _has_broken_references(schema_def):
+        return {"type": "object", "additionalProperties": True}
+
+    result: dict[str, Any] = {}
+    for key, value in schema_def.items():
+        if isinstance(value, dict):
+            result[key] = _patch_broken_refs(value)
+        elif isinstance(value, list):
+            result[key] = [
+                _patch_broken_refs(item) if isinstance(item, dict) else item for item in value
+            ]
+        else:
+            result[key] = value
+    return result
