@@ -760,10 +760,7 @@ class AuthenticatedHTTPXClient:
         """
         path = AuthenticatedHTTPXClient._path_for_url(url)
         last = path.rstrip("/").rsplit("/", 1)[-1]
-        return bool(
-            last
-            and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last))
-        )
+        return bool(last and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last)))
 
     @staticmethod
     def _maybe_annotate_404_response(
