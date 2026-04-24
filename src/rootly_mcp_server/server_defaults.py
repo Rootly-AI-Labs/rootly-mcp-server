@@ -373,6 +373,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/workflows",
     "/workflows/{workflow_id}",
     "/workflow_groups",
+    "/workflow_groups/{id}",
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
     "/workflows/{workflow_id}/form_field_conditions",
@@ -394,6 +395,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/live_call_routers",
     "/live_call_routers/{id}",
     # Post-incident and retrospectives - create + update
+    "/post_incident_reviews",
     "/post_incident_reviews/{id}",
     "/retrospective_processes",
     "/retrospective_processes/{id}",
@@ -401,6 +403,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/retrospective_process_groups/{id}",
     "/retrospective_processes/{retrospective_process_id}/retrospective_steps",
     "/retrospective_steps/{id}",
+    "/postmortem_templates",
     "/postmortem_templates/{id}",
     # Communications - create + update
     "/communications_groups",
@@ -413,11 +416,15 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/communications_types/{id}",
     # Causes and catalog - create + update
     "/causes",
+    "/causes/{id}",
     "/catalogs",
+    "/catalogs/{id}",
     "/catalogs/{catalog_id}/entities",
+    "/catalog_entities/{id}",
     # Sub-statuses - create + update
     "/sub_statuses",
     "/sub_statuses/{id}",
+    "/incident_sub_statuses",
     "/incident_sub_statuses/{id}",
     # User notification preferences - create + update
     "/users/{user_id}/notification_rules",
@@ -435,13 +442,18 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     # Form and field management - create + update
     "/custom_fields",
     "/custom_fields/{id}",
+    "/custom_field_options",
     "/custom_field_options/{id}",
     "/form_sets",
     "/form_sets/{id}",
     "/form_field_placements/{id}",
     "/form_field_placement_conditions/{id}",
     "/form_set_conditions/{id}",
+    # Status pages - create + update
+    "/status-pages",
+    "/status-pages/{id}",
     # Status page templates
+    "/status_page_templates",
     "/status_page_templates/{id}",
 ]
 

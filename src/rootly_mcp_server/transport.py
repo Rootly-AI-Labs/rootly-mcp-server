@@ -722,6 +722,7 @@ class AuthenticatedHTTPXClient:
         response = self._maybe_normalize_incident_form_field_selection_response(
             method, url, response
         )
+        response = self._maybe_annotate_404_response(method, url, response)
 
         return response
 
@@ -741,6 +742,68 @@ class AuthenticatedHTTPXClient:
         if len(payload) == 1 and isinstance(body, dict):
             return body
         return payload
+
+    # Matches UUID v4 format: 8-4-4-4-12 lowercase hex chars
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+    )
+
+    @staticmethod
+    def _path_has_id_segment(url: str) -> bool:
+        """Return True if the URL path ends with what looks like an ID segment.
+
+        Collection paths (/v1/heartbeats, /v1/status-pages) return False.
+        Individual-resource paths (/v1/heartbeats/123) return True.
+
+        Hyphenated resource names like 'status-pages' must not be confused with
+        UUID-style IDs — the UUID check requires strict hex-only segments.
+        """
+        path = AuthenticatedHTTPXClient._path_for_url(url)
+        last = path.rstrip("/").rsplit("/", 1)[-1]
+        return bool(last and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last)))
+
+    @staticmethod
+    def _maybe_annotate_404_response(
+        method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Append a plan-gating hint to 404 responses.
+
+        Rootly returns 404 for endpoints that are locked to a specific subscription
+        tier, even when the request is valid. The response body uses the generic
+        title "Not found or unauthorized" with no plan-specific discriminator.
+
+        Heuristic: a 404 on a collection path (no trailing ID) is almost certainly
+        plan gating regardless of method.  A 404 on an ID path during a write is
+        ambiguous — the resource may simply not exist — so the hint is softened.
+        """
+        if response.status_code != 404:
+            return response
+        has_id = AuthenticatedHTTPXClient._path_has_id_segment(url)
+        is_write = method.upper() in {"POST", "PUT", "PATCH"}
+        # Skip GET on ID paths — those are ordinary "resource not found" responses
+        if has_id and not is_write:
+            return response
+        try:
+            body = response.json()
+            if not has_id:
+                hint = (
+                    "This 404 most likely means the feature is not enabled on your Rootly plan. "
+                    "Contact Rootly support to enable it for your organisation."
+                )
+            else:
+                hint = (
+                    "This 404 may mean the resource does not exist, or that the feature is not "
+                    "enabled on your Rootly plan. Contact Rootly support if the resource exists "
+                    "and the error persists."
+                )
+            if isinstance(body, dict):
+                body.setdefault("_plan_gating_hint", hint)
+            else:
+                body = {"original_response": body, "_plan_gating_hint": hint}
+            response._content = json.dumps(body).encode()  # noqa: SLF001
+        except Exception:  # nosec B110 - Safe fallback; annotation is best-effort
+            pass
+        return response
 
     @staticmethod
     def _is_alert_endpoint(url: str) -> bool:
