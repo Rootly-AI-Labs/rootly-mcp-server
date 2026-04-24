@@ -743,17 +743,27 @@ class AuthenticatedHTTPXClient:
             return body
         return payload
 
+    # Matches UUID v4 format: 8-4-4-4-12 lowercase hex chars
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+    )
+
     @staticmethod
     def _path_has_id_segment(url: str) -> bool:
         """Return True if the URL path ends with what looks like an ID segment.
 
-        Collection paths (/v1/heartbeats) return False.
+        Collection paths (/v1/heartbeats, /v1/status-pages) return False.
         Individual-resource paths (/v1/heartbeats/123) return True.
+
+        Hyphenated resource names like 'status-pages' must not be confused with
+        UUID-style IDs — the UUID check requires strict hex-only segments.
         """
         path = AuthenticatedHTTPXClient._path_for_url(url)
         last = path.rstrip("/").rsplit("/", 1)[-1]
-        # Numeric IDs or UUID-shaped strings indicate a specific resource
-        return bool(last and (last.isdigit() or (len(last) > 8 and "-" in last)))
+        return bool(
+            last
+            and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last))
+        )
 
     @staticmethod
     def _maybe_annotate_404_response(
