@@ -349,6 +349,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     # Incident mutations
     "/alert_events/{id}",
     "/incidents/{incident_id}/action_items",
+    "/incidents/{incident_id}/events",
     "/incidents/{incident_id}/form_field_selections",
     "/incident_form_field_selections/{id}",
     # On-call schedules - create + update
