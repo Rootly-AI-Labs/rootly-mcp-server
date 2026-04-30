@@ -35,7 +35,9 @@ def register_resource_handlers(
             resolved_incident_id = await _resolve_incident_reference_to_uuid(
                 incident_id, make_authenticated_request
             )
-            response = await make_authenticated_request("GET", f"/v1/incidents/{resolved_incident_id}")
+            response = await make_authenticated_request(
+                "GET", f"/v1/incidents/{resolved_incident_id}"
+            )
             response.raise_for_status()
             incident_data = strip_heavy_nested_data({"data": [response.json().get("data", {})]})
 
