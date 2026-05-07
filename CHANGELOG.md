@@ -5,6 +5,16 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.6] - Released 2026-05-07
+
+### Features
+
+- **Open Plugins Discovery Support**: Added a root `.mcp.json` so plugin catalogs like cursor.directory can auto-detect the hosted Rootly MCP configuration and generate one-click install flows
+
+### Dependencies
+
+- **Routine Dependency Refresh**: Pulled in the latest minor and patch dependency updates from Dependabot
+
 ## [2.3.5] - Released 2026-05-07
 
 ### Fixed
