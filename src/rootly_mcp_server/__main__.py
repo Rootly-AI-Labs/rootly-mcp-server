@@ -276,7 +276,9 @@ def run_dual_http_server(
     stateless_http = streamable_http_stateless_enabled(
         hosted=True, fastmcp_stateless_http=fastmcp.settings.stateless_http
     )
-    logger.info("Streamable HTTP configured in %s mode", "stateless" if stateless_http else "stateful")
+    logger.info(
+        "Streamable HTTP configured in %s mode", "stateless" if stateless_http else "stateful"
+    )
 
     sse_transport = SseServerTransport(message_path)
 
