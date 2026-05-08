@@ -40,6 +40,7 @@ _session_error_context: contextvars.ContextVar[dict[str, Any] | None] = contextv
 
 _MAX_LOG_EXCERPT_CHARS = 800
 _MAX_LOG_LIST_ITEMS = 20
+_MAX_RESPONSE_BYTES = 500_000
 
 
 def _sanitize_log_excerpt(value: Any, max_length: int = _MAX_LOG_EXCERPT_CHARS) -> str:
@@ -526,6 +527,58 @@ def strip_heavy_shift_data(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _strip_included_sideloads(data: dict[str, Any]) -> dict[str, Any]:
+    """Remove heavy sideloaded ``included`` arrays from JSON:API responses.
+
+    The Rootly API embeds full relationship objects in ``included``.  For
+    collection responses this can add hundreds of KB.  We keep relationship
+    *references* inside each resource (``relationships.*.data.{id,type}``) so
+    the caller still knows which IDs are linked, but drop the fat sideloads.
+    """
+    included = data.get("included")
+    if isinstance(included, list) and len(included) > 0:
+        data["included"] = [
+            {"id": item.get("id"), "type": item.get("type")}
+            for item in included
+            if isinstance(item, dict)
+        ]
+    return data
+
+
+def _cap_response_size(data: Any, raw_bytes: int) -> Any:
+    """Truncate a parsed JSON:API collection when the serialised response
+    exceeds ``_MAX_RESPONSE_BYTES``.
+
+    Returns the (possibly truncated) data and lets the caller re-serialise.
+    Only operates on list-style ``data`` payloads — single-resource responses
+    are returned unchanged because they are rarely large enough to matter.
+    """
+    if raw_bytes <= _MAX_RESPONSE_BYTES:
+        return data
+
+    if not isinstance(data, dict):
+        return data
+
+    items = data.get("data")
+    if not isinstance(items, list) or len(items) == 0:
+        return data
+
+    target_ratio = _MAX_RESPONSE_BYTES / raw_bytes
+    keep = max(1, int(len(items) * target_ratio))
+
+    data["data"] = items[:keep]
+    data["_truncated"] = {
+        "original_count": len(items),
+        "returned_count": keep,
+        "message": (
+            f"Response truncated from {len(items)} to {keep} items to stay within "
+            f"size limits. Use pagination or filters to retrieve remaining items."
+        ),
+    }
+    data.pop("included", None)
+    return data
+
+
 def strip_heavy_alert_data(data: dict[str, Any]) -> dict[str, Any]:
     """
     Strip heavy nested data from alert responses to reduce payload size.
@@ -723,6 +776,7 @@ class AuthenticatedHTTPXClient:
             method, url, response
         )
         response = self._maybe_annotate_404_response(method, url, response)
+        response = self._maybe_cap_large_response(method, url, response)
 
         return response
 
@@ -954,6 +1008,37 @@ class AuthenticatedHTTPXClient:
             )
         return response
 
+    @staticmethod
+    def _maybe_cap_large_response(
+        method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Cap oversized GET responses by stripping sideloads and truncating collections."""
+        if method.upper() != "GET" or not response.is_success:
+            return response
+        try:
+            raw_bytes = len(response.content)
+        except (TypeError, AttributeError):
+            return response
+        if raw_bytes <= _MAX_RESPONSE_BYTES:
+            return response
+        try:
+            data = response.json()
+            if not isinstance(data, dict):
+                return response
+            data = _strip_included_sideloads(data)
+            data = _cap_response_size(data, raw_bytes)
+            response._content = json.dumps(data).encode()  # noqa: SLF001
+            logger.info(
+                "Capped large response for %s %s: %d -> %d bytes",
+                method,
+                AuthenticatedHTTPXClient._path_for_url(url),
+                raw_bytes,
+                len(response._content),  # noqa: SLF001
+            )
+        except Exception:
+            logger.debug(f"Could not cap response for {url}", exc_info=True)
+        return response
+
     async def get(self, url: str, **kwargs):
         """Proxy to request with GET method."""
         return await self.request("GET", url, **kwargs)
@@ -1032,13 +1117,16 @@ class AuthenticatedHTTPXClient:
         response = self._maybe_normalize_incident_form_field_selection_response(
             request.method, str(request.url), response
         )
+        response = self._maybe_cap_large_response(
+            request.method, str(request.url), response
+        )
         return response
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        pass
+        await self.client.aclose()
 
     def __getattr__(self, name):
         # Delegate all other attributes to the underlying client, except for request methods
