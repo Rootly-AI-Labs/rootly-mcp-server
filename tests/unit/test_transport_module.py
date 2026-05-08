@@ -1,5 +1,6 @@
 """Focused tests for transport module."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -762,3 +763,51 @@ class TestTransportModule:
             "email": "spencer@example.com",
             "time_zone": "UTC",
         }
+
+    def test_cap_large_response_preserves_collection_when_sideload_strip_is_enough(self):
+        item_count = 220
+        items = [
+            {
+                "id": f"inc-{idx}",
+                "type": "incidents",
+                "attributes": {"title": f"Incident {idx}"},
+                "relationships": {
+                    "service": {"data": {"id": f"svc-{idx}", "type": "services"}},
+                },
+            }
+            for idx in range(item_count)
+        ]
+        included = [
+            {
+                "id": f"svc-{idx}",
+                "type": "services",
+                "attributes": {
+                    "name": f"Service {idx}",
+                    "description": "x" * 4000,
+                },
+            }
+            for idx in range(item_count)
+        ]
+        payload = {"data": items, "included": included}
+        raw_bytes = json.dumps(payload).encode()
+        assert len(raw_bytes) > transport._MAX_RESPONSE_BYTES
+
+        stripped_payload = transport._strip_included_sideloads(json.loads(json.dumps(payload)))
+        stripped_bytes = json.dumps(stripped_payload).encode()
+        assert len(stripped_bytes) <= transport._MAX_RESPONSE_BYTES
+
+        response = httpx.Response(
+            200,
+            request=httpx.Request("GET", "https://api.rootly.com/v1/incidents"),
+            content=raw_bytes,
+        )
+
+        result = transport.AuthenticatedHTTPXClient._maybe_cap_large_response(
+            "GET", "/v1/incidents", response
+        )
+
+        capped = result.json()
+        assert len(capped["data"]) == item_count
+        assert capped.get("_truncated") is None
+        assert capped["included"][0] == {"id": "svc-0", "type": "services"}
+        assert len(result.content) <= transport._MAX_RESPONSE_BYTES

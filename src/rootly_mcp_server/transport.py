@@ -1026,7 +1026,19 @@ class AuthenticatedHTTPXClient:
             if not isinstance(data, dict):
                 return response
             data = _strip_included_sideloads(data)
-            data = _cap_response_size(data, raw_bytes)
+            stripped_bytes = json.dumps(data).encode()
+            if len(stripped_bytes) <= _MAX_RESPONSE_BYTES:
+                response._content = stripped_bytes  # noqa: SLF001
+                logger.info(
+                    "Capped large response for %s %s: %d -> %d bytes",
+                    method,
+                    AuthenticatedHTTPXClient._path_for_url(url),
+                    raw_bytes,
+                    len(response._content),  # noqa: SLF001
+                )
+                return response
+
+            data = _cap_response_size(data, len(stripped_bytes))
             response._content = json.dumps(data).encode()  # noqa: SLF001
             logger.info(
                 "Capped large response for %s %s: %d -> %d bytes",
