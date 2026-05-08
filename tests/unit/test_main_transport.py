@@ -6,7 +6,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from rootly_mcp_server.__main__ import _get_sorted_tool_names, get_server, main, normalize_transport
+from rootly_mcp_server.__main__ import (
+    _get_sorted_tool_names,
+    get_server,
+    main,
+    normalize_transport,
+    streamable_http_stateless_enabled,
+)
 
 
 @pytest.mark.parametrize(
@@ -77,6 +83,22 @@ def test_get_server_keeps_hosted_default_write_surface():
     assert mock_create.call_args is not None
     assert mock_create.call_args.kwargs["hosted"] is True
     assert mock_create.call_args.kwargs["enable_write_tools"] is True
+
+
+def test_streamable_http_defaults_hosted_mode_to_stateless_when_unset():
+    with patch.dict("os.environ", {}, clear=True):
+        assert streamable_http_stateless_enabled(hosted=True, fastmcp_stateless_http=False) is True
+        assert (
+            streamable_http_stateless_enabled(hosted=False, fastmcp_stateless_http=False) is False
+        )
+
+
+def test_streamable_http_respects_explicit_fastmcp_setting():
+    with patch.dict("os.environ", {"FASTMCP_STATELESS_HTTP": "false"}, clear=True):
+        assert streamable_http_stateless_enabled(hosted=True, fastmcp_stateless_http=False) is False
+
+    with patch.dict("os.environ", {"FASTMCP_STATELESS_HTTP": "true"}, clear=True):
+        assert streamable_http_stateless_enabled(hosted=False, fastmcp_stateless_http=True) is True
 
 
 @pytest.mark.asyncio

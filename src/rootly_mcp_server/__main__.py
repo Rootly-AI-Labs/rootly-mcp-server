@@ -63,6 +63,20 @@ def normalize_transport_or_default(value: str, default: TransportName = "stdio")
         return default
 
 
+def streamable_http_stateless_enabled(*, hosted: bool, fastmcp_stateless_http: bool) -> bool:
+    """Choose streamable HTTP session mode with a safe hosted default.
+
+    Hosted streamable HTTP traffic is high-churn and most clients do not send
+    DELETE to close MCP sessions. On current MCP SDK versions that leaks
+    stateful session transports until process restart. We therefore default
+    hosted deployments to stateless mode unless the operator explicitly sets
+    ``FASTMCP_STATELESS_HTTP``.
+    """
+    if "FASTMCP_STATELESS_HTTP" in os.environ:
+        return fastmcp_stateless_http
+    return hosted
+
+
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Start the Rootly MCP server for API integration.")
@@ -259,7 +273,10 @@ def run_dual_http_server(
     sse_path = fastmcp.settings.sse_path
     streamable_path = fastmcp.settings.streamable_http_path
     message_path = fastmcp.settings.message_path
-    stateless_http = fastmcp.settings.stateless_http
+    stateless_http = streamable_http_stateless_enabled(
+        hosted=True, fastmcp_stateless_http=fastmcp.settings.stateless_http
+    )
+    logger.info("Streamable HTTP configured in %s mode", "stateless" if stateless_http else "stateful")
 
     sse_transport = SseServerTransport(message_path)
 
