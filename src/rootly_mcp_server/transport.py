@@ -1117,9 +1117,7 @@ class AuthenticatedHTTPXClient:
         response = self._maybe_normalize_incident_form_field_selection_response(
             request.method, str(request.url), response
         )
-        response = self._maybe_cap_large_response(
-            request.method, str(request.url), response
-        )
+        response = self._maybe_cap_large_response(request.method, str(request.url), response)
         return response
 
     async def __aenter__(self):
