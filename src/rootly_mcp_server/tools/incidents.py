@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Literal, cast
 
@@ -22,6 +23,12 @@ INCIDENT_LIST_FIELDS = (
     "id,sequential_id,title,summary,status,severity,created_at,updated_at,url,"
     "started_at,resolved_at,retrospective_progress_status"
 )
+INCIDENT_REFERENCE_FIELDS = "id,sequential_id"
+INCIDENT_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+INCIDENT_SEQUENTIAL_REF_RE = re.compile(r"^(?:#|INC-)?(\d+)$")
 
 
 def _split_csv_values(value: str) -> list[str]:
@@ -76,12 +83,117 @@ def _summarize_incident_record(incident: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _extract_sequential_id(incident: dict[str, Any]) -> int | None:
+    """Extract a numeric sequential incident ID from a Rootly incident record."""
+    attrs = incident.get("attributes", {})
+    sequential_id = attrs.get("sequential_id")
+    if sequential_id is None:
+        return None
+    try:
+        return int(sequential_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_incident_reference(reference: str) -> tuple[str, str | int]:
+    """Classify and normalize an incident reference."""
+    normalized = _normalize_optional_text(reference)
+    if normalized is None:
+        raise ValueError("Incident reference is required")
+    if INCIDENT_UUID_RE.match(normalized):
+        return ("uuid", normalized)
+    sequential_match = INCIDENT_SEQUENTIAL_REF_RE.match(normalized)
+    if sequential_match:
+        return ("sequential", int(sequential_match.group(1)))
+    return ("direct", normalized)
+
+
+async def _resolve_incident_reference_to_uuid(
+    incident_reference: str,
+    make_authenticated_request: MakeAuthenticatedRequest,
+) -> str:
+    """Resolve supported incident references to the Rootly incident UUID."""
+    reference_kind, normalized_reference = _normalize_incident_reference(incident_reference)
+    if reference_kind in {"uuid", "direct"}:
+        return cast(str, normalized_reference)
+
+    target_sequential_id = cast(int, normalized_reference)
+    page_cache: dict[int, tuple[list[dict[str, Any]], dict[str, Any]]] = {}
+
+    async def _fetch_page(page_number: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        cached = page_cache.get(page_number)
+        if cached is not None:
+            return cached
+
+        response = await make_authenticated_request(
+            "GET",
+            "/v1/incidents",
+            params={
+                "page[size]": 100,
+                "page[number]": page_number,
+                "fields[incidents]": INCIDENT_REFERENCE_FIELDS,
+                "include": "",
+                "sort": "-created_at",
+            },
+        )
+        response.raise_for_status()
+        response_data = response.json()
+        incidents = cast(list[dict[str, Any]], response_data.get("data", []))
+        meta = cast(dict[str, Any], response_data.get("meta", {}))
+        page_cache[page_number] = (incidents, meta)
+        return incidents, meta
+
+    incidents, meta = await _fetch_page(1)
+    total_pages = int(meta.get("total_pages") or 1)
+
+    left = 1
+    right = total_pages
+
+    while left <= right:
+        page_number = (left + right) // 2
+        if page_number == 1:
+            page_incidents, _ = incidents, meta
+        else:
+            page_incidents, _ = await _fetch_page(page_number)
+
+        sequential_ids = [
+            sequential_id
+            for sequential_id in (_extract_sequential_id(incident) for incident in page_incidents)
+            if sequential_id is not None
+        ]
+
+        if not sequential_ids:
+            break
+
+        page_max = max(sequential_ids)
+        page_min = min(sequential_ids)
+
+        if target_sequential_id > page_max:
+            right = page_number - 1
+            continue
+        if target_sequential_id < page_min:
+            left = page_number + 1
+            continue
+
+        for incident in page_incidents:
+            if _extract_sequential_id(incident) == target_sequential_id:
+                incident_uuid = incident.get("id")
+                if isinstance(incident_uuid, str) and incident_uuid:
+                    return incident_uuid
+                break
+
+        raise LookupError(f"Incident reference not found: INC-{target_sequential_id}")
+
+    raise LookupError(f"Incident reference not found: INC-{target_sequential_id}")
+
+
 def register_incident_tools(
     mcp: Any,
     make_authenticated_request: MakeAuthenticatedRequest,
     strip_heavy_nested_data: StripHeavyNestedData,
     mcp_error: Any,
     generate_recommendation: GenerateRecommendation,
+    enable_write_tools: bool = True,
 ) -> None:
     """Register incident search and recommendation tools on the MCP server."""
 
@@ -276,10 +388,16 @@ def register_incident_tools(
         ] = 1,
     ) -> JsonDict:
         """
-        List incidents with structured filters for audit and review workflows.
+        🚨 List incidents with structured filters - ESSENTIAL for incident response.
+
+        WHEN TO USE:
+        • During incident response to check for related ongoing incidents
+        • For shift handoffs to review recent incidents by team/service
+        • For post-incident analysis to find patterns by severity/date range
+        • For audit workflows requiring specific filtering criteria
 
         Use this when you need date-range, team, service, severity, or status filters.
-        Prefer search_incidents only for lightweight free-text lookups.
+        For simple text searches, prefer search_incidents instead.
         """
         try:
             params, filters = await _prepare_incident_query_context(
@@ -617,11 +735,21 @@ def register_incident_tools(
 
     @mcp.tool(name="getIncident")
     async def get_incident(
-        incident_id: Annotated[str, Field(description="Incident ID to retrieve")],
+        incident_id: Annotated[
+            str,
+            Field(
+                description="Incident reference to retrieve: UUID, bare number like 4460, #4460, or INC-4460"
+            ),
+        ],
     ) -> JsonDict:
         """Retrieve a single incident with PIR-related fields for direct verification."""
         try:
-            response = await make_authenticated_request("GET", f"/v1/incidents/{incident_id}")
+            resolved_incident_id = await _resolve_incident_reference_to_uuid(
+                incident_id, make_authenticated_request
+            )
+            response = await make_authenticated_request(
+                "GET", f"/v1/incidents/{resolved_incident_id}"
+            )
             response.raise_for_status()
 
             response_data = response.json()
@@ -629,6 +757,22 @@ def register_incident_tools(
                 stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
                 response_data["data"] = stripped["data"][0]
             return cast(JsonDict, response_data)
+        except ValueError as e:
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    f"Failed to retrieve incident: {e}",
+                    "validation_error",
+                ),
+            )
+        except LookupError as e:
+            return cast(
+                JsonDict,
+                mcp_error.tool_error(
+                    f"Failed to retrieve incident: {e}",
+                    "not_found",
+                ),
+            )
         except Exception as e:
             error_type, error_message = mcp_error.categorize_error(e)
             return cast(
@@ -639,168 +783,178 @@ def register_incident_tools(
                 ),
             )
 
-    @mcp.tool(name="createIncident")
-    async def create_incident(
-        title: Annotated[
-            str | None,
-            Field(description="Incident title. If omitted, Rootly may autogenerate one."),
-        ] = None,
-        summary: Annotated[
-            str | None,
-            Field(description="Incident summary or short description."),
-        ] = None,
-        severity_id: Annotated[
-            str | None,
-            Field(description="Optional severity ID to attach to the incident."),
-        ] = None,
-        service_ids: Annotated[
-            str | None,
-            Field(description="Comma-separated service IDs to attach to the incident."),
-        ] = None,
-        team_ids: Annotated[
-            str | None,
-            Field(description="Comma-separated team IDs to attach to the incident."),
-        ] = None,
-        environment_ids: Annotated[
-            str | None,
-            Field(description="Comma-separated environment IDs to attach to the incident."),
-        ] = None,
-        incident_type_ids: Annotated[
-            str | None,
-            Field(description="Comma-separated incident type IDs to attach to the incident."),
-        ] = None,
-    ) -> JsonDict:
-        """Create an incident with a scoped set of fields for agent-driven workflows."""
-        normalized_title = _normalize_optional_text(title)
-        normalized_summary = _normalize_optional_text(summary)
+    if enable_write_tools:
 
-        if normalized_title is None and normalized_summary is None:
-            return cast(
-                JsonDict,
-                mcp_error.tool_error(
-                    "Must provide at least one of title or summary",
-                    "validation_error",
-                ),
-            )
+        @mcp.tool(name="createIncident")
+        async def create_incident(
+            title: Annotated[
+                str | None,
+                Field(description="Incident title. If omitted, Rootly may autogenerate one."),
+            ] = None,
+            summary: Annotated[
+                str | None,
+                Field(description="Incident summary or short description."),
+            ] = None,
+            severity_id: Annotated[
+                str | None,
+                Field(description="Optional severity ID to attach to the incident."),
+            ] = None,
+            service_ids: Annotated[
+                str | None,
+                Field(description="Comma-separated service IDs to attach to the incident."),
+            ] = None,
+            team_ids: Annotated[
+                str | None,
+                Field(description="Comma-separated team IDs to attach to the incident."),
+            ] = None,
+            environment_ids: Annotated[
+                str | None,
+                Field(description="Comma-separated environment IDs to attach to the incident."),
+            ] = None,
+            incident_type_ids: Annotated[
+                str | None,
+                Field(description="Comma-separated incident type IDs to attach to the incident."),
+            ] = None,
+        ) -> JsonDict:
+            """Create an incident with a scoped set of fields for agent-driven workflows."""
+            normalized_title = _normalize_optional_text(title)
+            normalized_summary = _normalize_optional_text(summary)
 
-        attributes: dict[str, Any] = {}
-
-        if normalized_title is not None:
-            attributes["title"] = normalized_title
-        if normalized_summary is not None:
-            attributes["summary"] = normalized_summary
-
-        normalized_severity_id = _normalize_optional_text(severity_id)
-        if normalized_severity_id is not None:
-            attributes["severity_id"] = normalized_severity_id
-
-        csv_attribute_map = (
-            ("service_ids", service_ids),
-            ("group_ids", team_ids),
-            ("environment_ids", environment_ids),
-            ("incident_type_ids", incident_type_ids),
-        )
-        for attribute_name, raw_value in csv_attribute_map:
-            if raw_value is None:
-                continue
-            values = _split_csv_values(raw_value)
-            if values:
-                attributes[attribute_name] = values
-
-        payload = {
-            "data": {
-                "type": "incidents",
-                "attributes": attributes,
-            }
-        }
-
-        try:
-            response = await make_authenticated_request("POST", "/v1/incidents", json=payload)
-            response.raise_for_status()
-
-            response_data = response.json()
-            if isinstance(response_data.get("data"), dict):
-                stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
-                response_data["data"] = stripped["data"][0]
-            return cast(JsonDict, response_data)
-        except Exception as e:
-            error_type, error_message = mcp_error.categorize_error(e)
-            return cast(
-                JsonDict,
-                mcp_error.tool_error(
-                    f"Failed to create incident: {error_message}",
-                    error_type,
-                ),
-            )
-
-    @mcp.tool(name="updateIncident")
-    async def update_incident(
-        incident_id: Annotated[str, Field(description="Incident ID to update")],
-        retrospective_progress_status: Annotated[
-            str | None,
-            Field(
-                description="Retrospective/PIR status: one of not_started, active, completed, skipped"
-            ),
-        ] = None,
-        summary: Annotated[
-            str | None,
-            Field(description="Updated incident summary"),
-        ] = None,
-    ) -> JsonDict:
-        """Update scoped incident fields for PIR lifecycle automation."""
-        attributes: dict[str, Any] = {}
-
-        if retrospective_progress_status is not None:
-            if retrospective_progress_status not in RETROSPECTIVE_PROGRESS_STATUSES:
-                allowed = ", ".join(RETROSPECTIVE_PROGRESS_STATUSES)
+            if normalized_title is None and normalized_summary is None:
                 return cast(
                     JsonDict,
                     mcp_error.tool_error(
-                        f"retrospective_progress_status must be one of: {allowed}",
+                        "Must provide at least one of title or summary",
                         "validation_error",
                     ),
                 )
-            attributes["retrospective_progress_status"] = retrospective_progress_status
 
-        if summary is not None:
-            attributes["summary"] = summary
+            attributes: dict[str, Any] = {}
 
-        if not attributes:
-            return cast(
-                JsonDict,
-                mcp_error.tool_error(
-                    "Must provide at least one of retrospective_progress_status or summary",
-                    "validation_error",
-                ),
+            if normalized_title is not None:
+                attributes["title"] = normalized_title
+            if normalized_summary is not None:
+                attributes["summary"] = normalized_summary
+
+            normalized_severity_id = _normalize_optional_text(severity_id)
+            if normalized_severity_id is not None:
+                attributes["severity_id"] = normalized_severity_id
+
+            csv_attribute_map = (
+                ("service_ids", service_ids),
+                ("group_ids", team_ids),
+                ("environment_ids", environment_ids),
+                ("incident_type_ids", incident_type_ids),
             )
+            for attribute_name, raw_value in csv_attribute_map:
+                if raw_value is None:
+                    continue
+                values = _split_csv_values(raw_value)
+                if values:
+                    attributes[attribute_name] = values
 
-        payload = {
-            "data": {
-                "type": "incidents",
-                "attributes": attributes,
+            payload = {
+                "data": {
+                    "type": "incidents",
+                    "attributes": attributes,
+                }
             }
-        }
 
-        try:
-            response = await make_authenticated_request(
-                "PUT", f"/v1/incidents/{incident_id}", json=payload
-            )
-            response.raise_for_status()
+            try:
+                response = await make_authenticated_request("POST", "/v1/incidents", json=payload)
+                response.raise_for_status()
 
-            response_data = response.json()
-            if isinstance(response_data.get("data"), dict):
-                stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
-                response_data["data"] = stripped["data"][0]
-            return cast(JsonDict, response_data)
-        except Exception as e:
-            error_type, error_message = mcp_error.categorize_error(e)
-            return cast(
-                JsonDict,
-                mcp_error.tool_error(
-                    f"Failed to update incident: {error_message}",
-                    error_type,
+                response_data = response.json()
+                if isinstance(response_data.get("data"), dict):
+                    stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
+                    response_data["data"] = stripped["data"][0]
+                return cast(JsonDict, response_data)
+            except Exception as e:
+                error_type, error_message = mcp_error.categorize_error(e)
+                return cast(
+                    JsonDict,
+                    mcp_error.tool_error(
+                        f"Failed to create incident: {error_message}",
+                        error_type,
+                    ),
+                )
+
+        @mcp.tool(name="updateIncident")
+        async def update_incident(
+            incident_id: Annotated[
+                str,
+                Field(
+                    description="Incident reference to update: UUID, bare number like 4460, #4460, or INC-4460"
                 ),
-            )
+            ],
+            retrospective_progress_status: Annotated[
+                str | None,
+                Field(
+                    description="Retrospective/PIR status: one of not_started, active, completed, skipped"
+                ),
+            ] = None,
+            summary: Annotated[
+                str | None,
+                Field(description="Updated incident summary"),
+            ] = None,
+        ) -> JsonDict:
+            """Update scoped incident fields for PIR lifecycle automation."""
+            attributes: dict[str, Any] = {}
+
+            if retrospective_progress_status is not None:
+                if retrospective_progress_status not in RETROSPECTIVE_PROGRESS_STATUSES:
+                    allowed = ", ".join(RETROSPECTIVE_PROGRESS_STATUSES)
+                    return cast(
+                        JsonDict,
+                        mcp_error.tool_error(
+                            f"retrospective_progress_status must be one of: {allowed}",
+                            "validation_error",
+                        ),
+                    )
+                attributes["retrospective_progress_status"] = retrospective_progress_status
+
+            if summary is not None:
+                attributes["summary"] = summary
+
+            if not attributes:
+                return cast(
+                    JsonDict,
+                    mcp_error.tool_error(
+                        "Must provide at least one of retrospective_progress_status or summary",
+                        "validation_error",
+                    ),
+                )
+
+            payload = {
+                "data": {
+                    "type": "incidents",
+                    "attributes": attributes,
+                }
+            }
+
+            try:
+                resolved_incident_id = await _resolve_incident_reference_to_uuid(
+                    incident_id, make_authenticated_request
+                )
+                response = await make_authenticated_request(
+                    "PUT", f"/v1/incidents/{resolved_incident_id}", json=payload
+                )
+                response.raise_for_status()
+
+                response_data = response.json()
+                if isinstance(response_data.get("data"), dict):
+                    stripped = strip_heavy_nested_data({"data": [response_data["data"]]})
+                    response_data["data"] = stripped["data"][0]
+                return cast(JsonDict, response_data)
+            except Exception as e:
+                error_type, error_message = mcp_error.categorize_error(e)
+                return cast(
+                    JsonDict,
+                    mcp_error.tool_error(
+                        f"Failed to update incident: {error_message}",
+                        error_type,
+                    ),
+                )
 
     @mcp.tool()
     async def find_related_incidents(
@@ -819,14 +973,29 @@ def register_incident_tools(
             ),
         ] = "",
     ) -> JsonDict:
-        """Find similar incidents to help with context and resolution strategies. Provide either incident_id OR incident_description (e.g., 'website is down', 'database timeout errors'). Use status_filter to limit to specific incident statuses or leave empty for all incidents."""
+        """
+        🔍 Find historically similar incidents using ML similarity analysis - CRITICAL for incident response.
+
+        WHEN TO USE:
+        • EARLY in incident response to learn from past similar issues
+        • When you're unsure about root cause or resolution approach
+        • Before escalating to find if this is a known pattern
+        • For post-incident analysis to identify recurring issues
+
+        Provide either incident_id OR incident_description (e.g., 'website is down', 'database timeout errors').
+        Use status_filter to limit to specific incident statuses or leave empty for all incidents.
+        """
         try:
             target_incident: dict[str, Any] = {}
+            resolved_incident_id = ""
 
             if incident_id:
                 # Get the target incident details by ID
+                resolved_incident_id = await _resolve_incident_reference_to_uuid(
+                    incident_id, make_authenticated_request
+                )
                 target_response = await make_authenticated_request(
-                    "GET", f"/v1/incidents/{incident_id}"
+                    "GET", f"/v1/incidents/{resolved_incident_id}"
                 )
                 target_response.raise_for_status()
                 target_incident_data = strip_heavy_nested_data(
@@ -878,7 +1047,9 @@ def register_incident_tools(
             # Filter out the target incident itself if it exists
             if incident_id:
                 historical_incidents = [
-                    inc for inc in historical_incidents if str(inc.get("id")) != str(incident_id)
+                    inc
+                    for inc in historical_incidents
+                    if str(inc.get("id")) != str(resolved_incident_id)
                 ]
 
             if not historical_incidents:
@@ -887,6 +1058,7 @@ def register_incident_tools(
                     "message": "No historical incidents found for comparison",
                     "target_incident": {
                         "id": incident_id or "synthetic",
+                        "resolved_incident_id": resolved_incident_id or None,
                         "title": target_incident.get("attributes", {}).get(
                             "title", incident_description
                         ),
@@ -921,6 +1093,7 @@ def register_incident_tools(
             return {
                 "target_incident": {
                     "id": incident_id or "synthetic",
+                    "resolved_incident_id": resolved_incident_id or None,
                     "title": target_incident.get("attributes", {}).get(
                         "title", incident_description
                     ),
@@ -955,13 +1128,29 @@ def register_incident_tools(
             ),
         ] = "resolved",
     ) -> JsonDict:
-        """Suggest solutions based on similar incidents. Provide either incident_id OR title/description. Defaults to resolved incidents for solution mining, but can search all statuses."""
+        """
+        💡 Get actionable solution recommendations from similar resolved incidents - KEY for incident response.
+
+        WHEN TO USE:
+        • AFTER find_related_incidents to get specific resolution steps
+        • When team is stuck on how to resolve the current incident
+        • To speed up incident resolution with proven solutions
+        • For training new responders on resolution patterns
+
+        Provide either incident_id OR title/description. Defaults to resolved incidents for solution mining.
+        """
         try:
             target_incident: dict[str, Any] = {}
+            resolved_incident_id = ""
 
             if incident_id:
                 # Get incident details by ID
-                response = await make_authenticated_request("GET", f"/v1/incidents/{incident_id}")
+                resolved_incident_id = await _resolve_incident_reference_to_uuid(
+                    incident_id, make_authenticated_request
+                )
+                response = await make_authenticated_request(
+                    "GET", f"/v1/incidents/{resolved_incident_id}"
+                )
                 response.raise_for_status()
                 incident_data = strip_heavy_nested_data({"data": [response.json().get("data", {})]})
                 target_incident = incident_data.get("data", [{}])[0]
@@ -1009,7 +1198,9 @@ def register_incident_tools(
             # Filter out target incident if it exists
             if incident_id:
                 historical_incidents = [
-                    inc for inc in historical_incidents if str(inc.get("id")) != str(incident_id)
+                    inc
+                    for inc in historical_incidents
+                    if str(inc.get("id")) != str(resolved_incident_id)
                 ]
 
             if not historical_incidents:
@@ -1043,6 +1234,7 @@ def register_incident_tools(
             return {
                 "target_incident": {
                     "id": incident_id or "synthetic",
+                    "resolved_incident_id": resolved_incident_id or None,
                     "title": target_incident.get("attributes", {}).get("title", incident_title),
                     "description": target_incident.get("attributes", {}).get(
                         "summary", incident_description

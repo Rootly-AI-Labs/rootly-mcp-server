@@ -124,6 +124,99 @@ class TestServerCreation:
 
         assert not has_openapi_audit_findings(findings), findings
 
+    def test_filter_openapi_spec_disables_write_methods_by_default(self):
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/v1/teams": {
+                    "get": {"operationId": "listTeams"},
+                    "post": {"operationId": "createTeam"},
+                },
+                "/v1/workflows/123/workflow_tasks": {
+                    "get": {"operationId": "listWorkflowTasks"},
+                    "post": {"operationId": "createWorkflowTask"},
+                },
+                "/v1/workflow_tasks/456": {
+                    "get": {"operationId": "getWorkflowTask"},
+                    "put": {"operationId": "updateWorkflowTask"},
+                    "delete": {"operationId": "deleteWorkflowTask"},
+                },
+            },
+            "components": {"schemas": {}},
+        }
+
+        filtered = _filter_openapi_spec(
+            spec,
+            ["/v1/teams", "/v1/workflows/123/workflow_tasks", "/v1/workflow_tasks/456"],
+            delete_allowed_paths=[],
+            write_allowed_paths=["/v1/workflows/123/workflow_tasks", "/v1/workflow_tasks/456"],
+            enable_write_tools=False,
+        )
+
+        assert "post" not in filtered["paths"]["/v1/teams"]
+        assert "post" not in filtered["paths"]["/v1/workflows/123/workflow_tasks"]
+        assert "put" not in filtered["paths"]["/v1/workflow_tasks/456"]
+        assert "delete" not in filtered["paths"]["/v1/workflow_tasks/456"]
+
+    def test_filter_openapi_spec_only_exposes_curated_write_methods_when_enabled(self):
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/v1/teams": {
+                    "get": {"operationId": "listTeams"},
+                    "post": {"operationId": "createTeam"},
+                },
+                "/v1/workflows/123/workflow_tasks": {
+                    "get": {"operationId": "listWorkflowTasks"},
+                    "post": {"operationId": "createWorkflowTask"},
+                },
+                "/v1/workflow_tasks/456": {
+                    "get": {"operationId": "getWorkflowTask"},
+                    "put": {"operationId": "updateWorkflowTask"},
+                },
+            },
+            "components": {"schemas": {}},
+        }
+
+        filtered = _filter_openapi_spec(
+            spec,
+            ["/v1/teams", "/v1/workflows/123/workflow_tasks", "/v1/workflow_tasks/456"],
+            write_allowed_paths=["/v1/workflows/123/workflow_tasks", "/v1/workflow_tasks/456"],
+            enable_write_tools=True,
+        )
+
+        assert "post" not in filtered["paths"]["/v1/teams"]
+        assert "post" in filtered["paths"]["/v1/workflows/123/workflow_tasks"]
+        assert "put" in filtered["paths"]["/v1/workflow_tasks/456"]
+
+    def test_filter_openapi_spec_can_allowlist_specific_operation_ids(self):
+        spec = {
+            "openapi": "3.0.0",
+            "info": {"title": "Test API", "version": "1.0.0"},
+            "paths": {
+                "/v1/teams": {
+                    "get": {"operationId": "listTeams"},
+                    "post": {"operationId": "createTeam"},
+                },
+                "/v1/users/me": {
+                    "get": {"operationId": "getCurrentUser"},
+                },
+            },
+            "components": {"schemas": {}},
+        }
+
+        filtered = _filter_openapi_spec(
+            spec,
+            ["/v1/teams", "/v1/users/me"],
+            enabled_operation_ids={"listTeams"},
+        )
+
+        assert "get" in filtered["paths"]["/v1/teams"]
+        assert "post" not in filtered["paths"]["/v1/teams"]
+        assert "/v1/users/me" not in filtered["paths"]
+
     def test_create_server_with_bundled_swagger(self):
         """Ensure FastMCP can instantiate from the bundled swagger without schema errors."""
         swagger_path = os.path.join(os.path.dirname(server_module.__file__), "data", "swagger.json")
@@ -197,34 +290,167 @@ class TestServerCreation:
 class TestBundledIncidentFormFieldSelectionTools:
     """Verify the bundled swagger exposes the intended incident custom field tools."""
 
-    async def test_incident_form_field_selection_tools_are_available(self, mock_environment_token):
+    async def test_default_server_shows_generated_write_tools(self, mock_environment_token):
         server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        # Read tools should be present
+        assert "listIncidentActionItems" in tool_names
+        assert "listIncidentFormFieldSelections" in tool_names
+        assert "getIncidentFormFieldSelection" in tool_names
+
+        # Write tools should also be present by default
+        assert "createIncidentActionItem" in tool_names
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
+        # Delete operations are still restricted
+        assert "deleteIncidentFormFieldSelection" not in tool_names
+
+    async def test_default_server_shows_workflow_write_tools(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        # Read tools should be present
+        assert "listWorkflowTasks" in tool_names
+        assert "getWorkflowTask" in tool_names
+
+        # Write tools should also be present by default
+        assert "createWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+        # Delete operations are still restricted
+        assert "deleteWorkflowTask" not in tool_names
+
+    async def test_default_server_shows_additional_read_tools(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=False)
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        # Workflow observability reads
+        assert "ListWorkflowRuns" in tool_names
+        assert "listWorkflowGroups" in tool_names
+        assert "getWorkflowGroup" in tool_names
+        assert "listWorkflowFormFieldConditions" in tool_names
+        assert "getWorkflowFormFieldCondition" in tool_names
+
+        # Alert, status page, form metadata, and catalog reads
+        assert "listAlertEvents" in tool_names
+        assert "getAlertEvent" in tool_names
+        assert "listStatusPages" in tool_names
+        assert "getStatusPage" in tool_names
+        assert "listStatusPageTemplates" in tool_names
+        assert "getStatusPageTemplate" in tool_names
+        assert "getTeamIncidentsChart" in tool_names
+        assert "getServiceIncidentsChart" in tool_names
+        assert "getServiceUptimeChart" in tool_names
+        assert "getFunctionalityIncidentsChart" in tool_names
+        assert "getFunctionalityUptimeChart" in tool_names
+        assert "listAlertGroups" in tool_names
+        assert "getAlertGroup" in tool_names
+        assert "listAlertRoutingRules" in tool_names
+        assert "getAlertRoutingRule" in tool_names
+        assert "listAlertsSources" in tool_names
+        assert "getAlertsSource" in tool_names
+        assert "listAlertUrgencies" in tool_names
+        assert "getAlertUrgency" in tool_names
+        assert "listAllIncidentActionItems" in tool_names
+        assert "getIncidentActionItems" in tool_names
+        assert "listCustomForms" in tool_names
+        assert "getCustomForm" in tool_names
+        assert "listFormFields" in tool_names
+        assert "getFormField" in tool_names
+        assert "listFormFieldOptions" in tool_names
+        assert "getFormFieldOption" in tool_names
+        assert "listCatalogs" in tool_names
+        assert "getCatalog" in tool_names
+        assert "listCatalogEntities" in tool_names
+        assert "getCatalogEntity" in tool_names
+        assert "listCauses" in tool_names
+        assert "getCause" in tool_names
+
+        # Workflow creates now enabled, but workflow runs remain excluded
+        assert "createWorkflowRun" not in tool_names
+        # Alert configuration writes remain excluded (connects to external systems)
+        assert "createAlertGroup" not in tool_names
+        assert "updateAlertGroup" not in tool_names
+        assert "createAlertRoutingRule" not in tool_names
+        assert "updateAlertRoutingRule" not in tool_names
+        assert "createAlertSource" not in tool_names
+        assert "updateAlertSource" not in tool_names
+        assert "createAlertUrgency" not in tool_names
+        assert "updateAlertUrgency" not in tool_names
+        # Custom form/field creation excluded (schema-level configuration)
+        assert "createCustomForm" not in tool_names
+        assert "updateCustomForm" not in tool_names
+        assert "createFormField" not in tool_names
+        assert "updateFormField" not in tool_names
+
+    async def test_enable_write_tools_exposes_curated_generated_write_tools(
+        self, mock_environment_token
+    ):
+        server = create_rootly_mcp_server(hosted=False, enable_write_tools=True)
 
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
         assert "createIncidentActionItem" in tool_names
-        assert "listIncidentActionItems" in tool_names
-
         assert "createIncidentFormFieldSelection" in tool_names
-        assert "listIncidentFormFieldSelections" in tool_names
-        assert "getIncidentFormFieldSelection" in tool_names
         assert "updateIncidentFormFieldSelection" in tool_names
+        assert "updateEnvironment" in tool_names
+        assert "updateEscalationLevel" in tool_names
+        assert "updateEscalationPath" in tool_names
+        assert "updateEscalationPolicy" in tool_names
+        assert "updateFunctionality" in tool_names
+        assert "updateIncidentType" in tool_names
+        assert "updateOnCallRole" in tool_names
+        assert "updateOnCallShadow" in tool_names
+        assert "updateOverrideShift" in tool_names
+        assert "updateSchedule" in tool_names
+        assert "updateScheduleRotation" in tool_names
+        assert "updateService" in tool_names
+        assert "updateSeverity" in tool_names
+        assert "updateTeam" in tool_names
+        assert "updateWorkflow" in tool_names
+        assert "createWorkflowTask" in tool_names
+        assert "updateWorkflowTask" in tool_names
+        assert "updateAlert" not in tool_names
+        assert "updateUser" not in tool_names
+        assert "deleteSchedule" not in tool_names
+        assert "deleteScheduleRotation" not in tool_names
+        assert "deleteEscalationPolicy" not in tool_names
+        assert "deleteEscalationPath" not in tool_names
+        assert "deleteEscalationLevel" not in tool_names
+        assert "deleteWorkflowTask" not in tool_names
 
-        assert "deleteIncidentFormFieldSelection" not in tool_names
-
-    async def test_workflow_task_tools_are_available_without_delete(self, mock_environment_token):
-        server = create_rootly_mcp_server(hosted=False)
+    async def test_hosted_server_keeps_curated_write_tools_by_default(self, mock_environment_token):
+        server = create_rootly_mcp_server(hosted=True)
 
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
         assert "createWorkflowTask" in tool_names
-        assert "listWorkflowTasks" in tool_names
-        assert "getWorkflowTask" in tool_names
         assert "updateWorkflowTask" in tool_names
-
+        assert "createIncidentActionItem" in tool_names
+        assert "createIncidentFormFieldSelection" in tool_names
+        assert "updateIncidentFormFieldSelection" in tool_names
         assert "deleteWorkflowTask" not in tool_names
+
+    async def test_enabled_tools_allowlist_filters_generated_and_custom_tools(
+        self, mock_environment_token
+    ):
+        server = create_rootly_mcp_server(
+            hosted=False,
+            enabled_tools={"listTeams", "listSeverities"},
+        )
+
+        tools = await server.list_tools()
+        tool_names = {tool.name for tool in tools}
+
+        assert tool_names == {"listTeams", "listSeverities"}
 
 
 @pytest.mark.unit
@@ -1079,6 +1305,7 @@ class TestOpenAPISpecFiltering:
             original_spec,
             allowed_paths,
             delete_allowed_paths=delete_allowed_paths,
+            enable_write_tools=True,
         )
         filtered_paths = filtered_spec["paths"]
 

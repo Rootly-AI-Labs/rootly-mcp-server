@@ -132,8 +132,15 @@ def register_oncall_tools(
         ] = "user",
     ) -> dict:
         """
-        Get on-call shift metrics for a specified time period. Returns shift counts, total hours,
-        and other statistics grouped by user, schedule, or team.
+        📊 Get on-call workload metrics and shift statistics - ESSENTIAL for fairness and planning.
+
+        WHEN TO USE:
+        • Monthly/quarterly reviews of on-call distribution
+        • Before adjusting schedules to ensure fair workload
+        • For management reporting on on-call burden
+        • When investigating potential on-call burnout
+
+        Returns shift counts, total hours, and statistics grouped by user, schedule, or team.
 
         Examples:
         - Monthly report: start_date='2025-10-01', end_date='2025-10-31'

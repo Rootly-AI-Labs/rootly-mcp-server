@@ -267,6 +267,175 @@ class TestTransportModule:
             == ""
         )
 
+    def test_normalize_incident_form_field_selection_payload_textarea(self):
+        payload = {
+            "data": {
+                "id": "selection-1",
+                "type": "incident_form_field_selections",
+                "attributes": {
+                    "value": "Decagon Chat API degraded",
+                    "selected_group_ids": [],
+                    "selected_option_ids": [],
+                    "selected_service_ids": [],
+                    "selected_functionality_ids": [],
+                    "selected_catalog_entity_ids": [],
+                    "selected_user_ids": [],
+                    "selected_groups": {"id": None, "value": "Decagon Chat API degraded"},
+                    "selected_options": {"id": None, "value": "Decagon Chat API degraded"},
+                    "selected_services": {"id": None, "value": "Decagon Chat API degraded"},
+                    "selected_functionalities": {
+                        "id": None,
+                        "value": "Decagon Chat API degraded",
+                    },
+                    "selected_catalog_entities": {
+                        "id": None,
+                        "value": "Decagon Chat API degraded",
+                    },
+                    "selected_users": {"id": None, "value": "Decagon Chat API degraded"},
+                    "selected_environments": {
+                        "id": None,
+                        "value": "Decagon Chat API degraded",
+                    },
+                    "selected_causes": {"id": None, "value": "Decagon Chat API degraded"},
+                    "selected_incident_types": {
+                        "id": None,
+                        "value": "Decagon Chat API degraded",
+                    },
+                    "form_field": {"input_kind": "textarea"},
+                },
+            }
+        }
+
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
+        )
+        attributes = normalized["data"]["attributes"]
+
+        assert attributes["value"] == "Decagon Chat API degraded"
+        assert attributes["selected_group_ids"] == []
+        assert "selected_groups" not in attributes
+        assert "selected_options" not in attributes
+        assert "selected_services" not in attributes
+        assert "selected_functionalities" not in attributes
+        assert "selected_catalog_entities" not in attributes
+        assert "selected_users" not in attributes
+        assert "selected_environments" not in attributes
+        assert "selected_causes" not in attributes
+        assert "selected_incident_types" not in attributes
+
+    def test_normalize_incident_form_field_selection_payload_select_unchanged(self):
+        payload = {
+            "data": {
+                "id": "selection-2",
+                "type": "incident_form_field_selections",
+                "attributes": {
+                    "selected_option_ids": ["opt-1"],
+                    "selected_options": {"id": "opt-1", "value": "Database"},
+                    "form_field": {"input_kind": "select"},
+                },
+            }
+        }
+
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
+        )
+
+        assert normalized == payload
+
+    def test_normalize_incident_form_field_selection_list_payload(self):
+        payload = {
+            "data": [
+                {
+                    "id": "selection-3",
+                    "type": "incident_form_field_selections",
+                    "attributes": {
+                        "value": "External user impact only",
+                        "selected_groups": {"id": None, "value": "External user impact only"},
+                        "selected_group_ids": [],
+                        "form_field": {"input_kind": "textarea"},
+                    },
+                },
+                {
+                    "id": "selection-4",
+                    "type": "incident_form_field_selections",
+                    "attributes": {
+                        "selected_options": {"id": "opt-1", "value": "Database"},
+                        "selected_option_ids": ["opt-1"],
+                        "form_field": {"input_kind": "select"},
+                    },
+                },
+            ]
+        }
+
+        normalized = (
+            transport.AuthenticatedHTTPXClient._normalize_incident_form_field_selection_payload(
+                payload
+            )
+        )
+
+        assert "selected_groups" not in normalized["data"][0]["attributes"]
+        assert normalized["data"][1]["attributes"]["selected_options"] == {
+            "id": "opt-1",
+            "value": "Database",
+        }
+
+    def test_maybe_normalize_incident_form_field_selection_response(self):
+        response = httpx.Response(
+            200,
+            json={
+                "data": {
+                    "id": "selection-5",
+                    "type": "incident_form_field_selections",
+                    "attributes": {
+                        "value": "External user impact only",
+                        "selected_groups": {"id": None, "value": "External user impact only"},
+                        "selected_group_ids": [],
+                        "form_field": {"input_kind": "textarea"},
+                    },
+                }
+            },
+        )
+
+        result = transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
+            "PUT", "/v1/incident_form_field_selections/selection-5", response
+        )
+        parsed = result.json()
+
+        assert parsed["data"]["attributes"]["value"] == "External user impact only"
+        assert parsed["data"]["attributes"]["selected_group_ids"] == []
+        assert "selected_groups" not in parsed["data"]["attributes"]
+
+    def test_maybe_normalize_incident_form_field_selection_list_response(self):
+        response = httpx.Response(
+            200,
+            json={
+                "data": [
+                    {
+                        "id": "selection-6",
+                        "type": "incident_form_field_selections",
+                        "attributes": {
+                            "value": "External user impact only",
+                            "selected_groups": {"id": None, "value": "External user impact only"},
+                            "selected_group_ids": [],
+                            "form_field": {"input_kind": "textarea"},
+                        },
+                    }
+                ]
+            },
+        )
+
+        result = transport.AuthenticatedHTTPXClient._maybe_normalize_incident_form_field_selection_response(
+            "GET", "/v1/incidents/inc-123/form_field_selections", response
+        )
+        parsed = result.json()
+
+        assert parsed["data"][0]["attributes"]["selected_group_ids"] == []
+        assert "selected_groups" not in parsed["data"][0]["attributes"]
+
     def test_authenticated_client_user_agent_contains_mode(self):
         with patch.object(
             transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
@@ -354,6 +523,54 @@ class TestTransportModule:
         assert error_context["upstream_path"] == "/v1/alerts"
         assert error_context["upstream_log_level"] == "error"
 
+    @pytest.mark.asyncio
+    async def test_authenticated_client_unwraps_body_envelope_on_write_requests(self):
+        response = httpx.Response(
+            200,
+            request=httpx.Request("POST", "https://api.rootly.com/v1/workflows"),
+            content=b'{"data":{"id":"wf-1"}}',
+        )
+
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+            client.client.request = AsyncMock(return_value=response)
+
+            await client.request(
+                "POST",
+                "/v1/workflows",
+                json={"body": {"genius_workflow": {"name": "MCP verification workflow"}}},
+            )
+
+            _, kwargs = client.client.request.call_args
+            assert kwargs["json"] == {"genius_workflow": {"name": "MCP verification workflow"}}
+
+    @pytest.mark.asyncio
+    async def test_authenticated_client_preserves_non_envelope_payload_on_update_requests(self):
+        response = httpx.Response(
+            200,
+            request=httpx.Request("PATCH", "https://api.rootly.com/v1/workflows/wf-1"),
+            content=b'{"data":{"id":"wf-1"}}',
+        )
+
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+            client.client.request = AsyncMock(return_value=response)
+
+            await client.request(
+                "PATCH",
+                "/v1/workflows/wf-1",
+                json={"data": {"type": "workflows", "attributes": {"name": "Updated"}}},
+            )
+
+            _, kwargs = client.client.request.call_args
+            assert kwargs["json"] == {
+                "data": {"type": "workflows", "attributes": {"name": "Updated"}}
+            }
+
     def test_sanitize_log_excerpt_redacts_tokens_and_paths(self):
         excerpt = transport._sanitize_log_excerpt(
             'Bearer rootly_1234567890 File "/Users/spencercheng/app.py" failed'
@@ -390,6 +607,29 @@ class TestTransportModule:
         assert "labels" not in attrs
         assert result["data"][0]["relationships"]["alerts"] == {"count": 2}
         assert "included" not in result
+
+    def test_normalize_request_json_payload_unwraps_body_for_write_methods(self):
+        payload = {"body": {"genius_workflow": {"name": "workflow-name"}}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload("POST", payload)
+
+        assert result == {"genius_workflow": {"name": "workflow-name"}}
+
+    def test_normalize_request_json_payload_does_not_unwrap_for_get(self):
+        payload = {"body": {"query": "database timeout"}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload("GET", payload)
+
+        assert result == payload
+
+    def test_normalize_request_json_payload_keeps_non_envelope_dict(self):
+        payload = {"data": {"type": "incidents"}, "body": {"ignored": True}}
+
+        result = transport.AuthenticatedHTTPXClient._normalize_request_json_payload(
+            "PATCH", payload
+        )
+
+        assert result == payload
 
     def test_strip_heavy_user_data_keeps_profile_essentials(self):
         data = {

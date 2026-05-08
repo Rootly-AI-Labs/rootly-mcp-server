@@ -5,6 +5,126 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.6] - Released 2026-05-07
+
+### Features
+
+- **Open Plugins Discovery Support**: Added a root `.mcp.json` so plugin catalogs like cursor.directory can auto-detect the hosted Rootly MCP configuration and generate one-click install flows
+
+### Dependencies
+
+- **Routine Dependency Refresh**: Pulled in the latest minor and patch dependency updates from Dependabot
+
+## [2.3.5] - Released 2026-05-07
+
+### Fixed
+
+- **Sequential Incident Reference Resolution**: Added server-side resolution for incident references like `4460`, `#4460`, and `INC-4460`, so callers no longer need to convert sequential incident numbers to UUIDs themselves
+- **Broader Incident Tool Support**: Applied the same reference resolution behavior across `getIncident`, `updateIncident`, `find_related_incidents`, `suggest_solutions`, and the `incident://{incident_id}` resource for a more consistent incident workflow
+
+### Testing
+
+- **Incident Reference Coverage**: Added focused test coverage for UUID and sequential incident references, not-found handling, bounded lookup behavior, and the expanded incident tool/resource paths
+
+## [2.3.4] - Released 2026-04-30
+
+### Features
+
+- **Incident Timeline Events Enabled by Default**: Enabled creating incident timeline events by default, so timeline entries can now be created through MCP without extra configuration
+
+### Dependencies
+
+- **Routine Dependency Refresh**: Pulled in the latest minor and patch dependency updates from Dependabot
+
+## [2.3.3] - Released 2026-04-23
+
+### Fixed
+
+- **Schema and Path Interpretation**: Improved how the MCP interprets API schemas and path patterns so more tools can be exposed correctly
+- **Write Path Coverage**: Fixed write-path coverage gaps so generated tools line up more reliably with endpoints that support write actions
+- **Write Availability Guidance**: Improved the guidance returned when a write action is not available for the current endpoint or configuration
+- **Hyphenated Resource Matching**: Tightened path matching so hyphenated resources like `status-pages` are handled correctly
+
+## [2.3.2] - Released 2026-04-23
+
+### Fixed
+
+- **Generated Write Request Shape**: Fixed how generated MCP tools send create and update requests for API-backed endpoints
+- **Affected Endpoints**: This affected tools tied to endpoints like `/v1/workflows`, `/v1/workflow_groups`, `/v1/schedules`, and other generated write operations that expected a specific request shape
+- **Create Workflow Reliability**: As a result, tools like `createWorkflow` can complete successfully instead of stopping during request submission
+
+### Testing
+
+- **Request-Path Regression Coverage**: Added transport regression tests that assert write requests forward unwrapped JSON payloads and preserve already-correct non-envelope payloads
+
+## [2.3.1] - Released 2026-04-23
+
+### Fixed
+
+- **Restored Create Actions**: Restored missing create actions for key configuration endpoints, including workflows, workflow groups, schedules, schedule rotations, escalation policies, escalation paths, services, teams, and environments
+- **Create and Update Parity**: Closed the gap where users could list or update those records but could not create new ones through MCP
+- **Test Accuracy**: Corrected alert source tool-name assertions in unit tests (`createAlertSource` / `updateAlertSource`)
+
+## [2.3.0] - Released 2026-04-23
+
+### Features
+
+- **Broader API Coverage**: Expanded the MCP to cover many more Rootly API areas, including workflows, workflow groups, workflow tasks, schedules, schedule rotations, escalation policies, escalation paths, services, teams, environments, dashboards, playbooks, retrospectives, and monitoring-related resources
+- **More Write Actions**: Added more write actions across those areas, especially update actions, so the MCP can do more than just read data
+- **Wider Operational Use**: Made the MCP useful for more operational and configuration work, not just incident search and on-call lookups
+- **Workflow-Focused Tooling**: Introduced workflow-focused tool subsets and supporting resources for common MCP use cases
+
+### Testing
+
+- **Updated Assertions**: Fixed test assertions to match updated API operation names (listAlertsSources, getAlertsSource)
+- **Comprehensive Coverage**: All 382 tests passing with expanded API surface
+- **Security Validation**: Verified security boundaries remain intact with expanded tool set
+
+### Breaking Changes
+
+- None - Fully backward compatible with existing configurations and user workflows
+
+## [2.2.24] - Released 2026-04-22
+
+### Fixed
+
+- **Incident Form Field Selection Responses**: Normalized text and textarea form field selection responses so MCP clients receive the primary `value` plus `selected_*_ids`, without the redundant `selected_*` value objects repeated across unrelated resource types
+
+### Testing
+
+- **Response Normalization Coverage**: Added focused transport tests for single-item and list incident form field selection payloads, including a guard to leave select-style fields unchanged
+
+## [2.2.23] - Released 2026-04-22
+
+### Features
+
+- **Self-Hosted Tool Allowlists**: Added `ROOTLY_MCP_ENABLED_TOOLS` and `--enabled-tools` so self-hosted deployments can expose only an exact allowlist of MCP tool names
+- **Tool Discovery Command**: Added `--list-tools` so self-hosted users can print the effective tool names for their current configuration before narrowing the MCP surface
+- **Code Mode Alignment**: Applied the same allowlist behavior to the self-hosted Code Mode surface so discovery and enforcement stay consistent
+
+### Testing
+
+- **Live MCP Integration Coverage**: Added subprocess integration tests that boot the server, connect over streamable HTTP, call `tools/list`, and verify the live tool payload matches the configured allowlist
+
+### Documentation
+
+- **Self-Hosted Setup Guidance**: Documented the new allowlist and discovery workflow in the README, including smoke-test examples for read-only and write-enabled self-hosted setups
+
+## [2.2.20] - Released 2026-04-21
+
+### Security
+
+- **Critical Security Updates**: Upgraded vulnerable dependencies to address 3 security advisories
+- **authlib**: Updated from `1.6.9` to `1.7.0` to fix CSRF protection vulnerability (GHSA-jj8c-mmj3-mmgv)
+- **python-dotenv**: Updated from `1.1.0` to `1.2.2` to fix symlink attack vulnerability (GHSA-m8f7-34r5-grfg) 
+- **python-multipart**: Updated from `0.0.22` to `0.0.26` to fix denial of service vulnerability (CVE-2026-40347)
+- **Dependabot Configuration**: Fixed unsupported `semver-major-days` property for docker and github-actions ecosystems
+
+### Dependencies
+
+- **joserfc**: Added `1.6.4` as new dependency (required by updated authlib)
+- **Security Scanning**: All known vulnerabilities resolved as confirmed by pip-audit
+
 ## [2.2.19] - Released 2026-04-17
 
 ### Features

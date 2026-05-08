@@ -660,6 +660,8 @@ class AuthenticatedHTTPXClient:
         # Transform query parameters
         if "params" in kwargs:
             kwargs["params"] = self._transform_params(kwargs["params"])
+        if "json" in kwargs:
+            kwargs["json"] = self._normalize_request_json_payload(method, kwargs["json"])
 
         # Log incoming headers for debugging (before transformation)
         incoming_headers = kwargs.get("headers", {})
@@ -726,7 +728,90 @@ class AuthenticatedHTTPXClient:
         # there is no other interception point for auto-generated tools.
         response = self._maybe_strip_alert_response(method, url, response)
         response = self._maybe_strip_collection_response(method, url, response)
+        response = self._maybe_normalize_incident_form_field_selection_response(
+            method, url, response
+        )
+        response = self._maybe_annotate_404_response(method, url, response)
 
+        return response
+
+    @staticmethod
+    def _normalize_request_json_payload(method: str, payload: Any) -> Any:
+        """Normalize JSON payloads forwarded by generated tools.
+
+        Some generated write tools expose a top-level `body` parameter, which can
+        result in JSON payloads of shape `{"body": {...}}`. Rootly API write
+        endpoints expect the inner object as the actual request body.
+        """
+        if method.upper() not in {"POST", "PUT", "PATCH"}:
+            return payload
+        if not isinstance(payload, dict):
+            return payload
+        body = payload.get("body")
+        if len(payload) == 1 and isinstance(body, dict):
+            return body
+        return payload
+
+    # Matches UUID v4 format: 8-4-4-4-12 lowercase hex chars
+    _UUID_RE = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+    )
+
+    @staticmethod
+    def _path_has_id_segment(url: str) -> bool:
+        """Return True if the URL path ends with what looks like an ID segment.
+
+        Collection paths (/v1/heartbeats, /v1/status-pages) return False.
+        Individual-resource paths (/v1/heartbeats/123) return True.
+
+        Hyphenated resource names like 'status-pages' must not be confused with
+        UUID-style IDs — the UUID check requires strict hex-only segments.
+        """
+        path = AuthenticatedHTTPXClient._path_for_url(url)
+        last = path.rstrip("/").rsplit("/", 1)[-1]
+        return bool(last and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last)))
+
+    @staticmethod
+    def _maybe_annotate_404_response(
+        method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Append a plan-gating hint to 404 responses.
+
+        Rootly returns 404 for endpoints that are locked to a specific subscription
+        tier, even when the request is valid. The response body uses the generic
+        title "Not found or unauthorized" with no plan-specific discriminator.
+
+        Heuristic: a 404 on a collection path (no trailing ID) is almost certainly
+        plan gating regardless of method.  A 404 on an ID path during a write is
+        ambiguous — the resource may simply not exist — so the hint is softened.
+        """
+        if response.status_code != 404:
+            return response
+        has_id = AuthenticatedHTTPXClient._path_has_id_segment(url)
+        is_write = method.upper() in {"POST", "PUT", "PATCH"}
+        # Skip GET on ID paths — those are ordinary "resource not found" responses
+        if has_id and not is_write:
+            return response
+        try:
+            body = response.json()
+            if not has_id:
+                hint = (
+                    "This 404 most likely means the feature is not enabled on your Rootly plan. "
+                    "Contact Rootly support to enable it for your organisation."
+                )
+            else:
+                hint = (
+                    "This 404 may mean the resource does not exist, or that the feature is not "
+                    "enabled on your Rootly plan. Contact Rootly support if the resource exists "
+                    "and the error persists."
+                )
+            if isinstance(body, dict):
+                body.setdefault("_plan_gating_hint", hint)
+            else:
+                body = {"original_response": body, "_plan_gating_hint": hint}
+            response._content = json.dumps(body).encode()  # noqa: SLF001
+        except Exception:  # nosec B110 - Safe fallback; annotation is best-effort
+            pass
         return response
 
     @staticmethod
@@ -747,6 +832,13 @@ class AuthenticatedHTTPXClient:
             return httpx.URL(str(url)).path
         except Exception:
             return str(url).split("?", 1)[0]
+
+    @staticmethod
+    def _is_incident_form_field_selection_endpoint(path: str) -> bool:
+        """Return whether a path targets incident form field selection resources."""
+        return path.startswith("/v1/incident_form_field_selections/") or (
+            path.startswith("/v1/incidents/") and path.endswith("/form_field_selections")
+        )
 
     @staticmethod
     def _maybe_strip_alert_response(
@@ -790,6 +882,85 @@ class AuthenticatedHTTPXClient:
             response._content = json.dumps(stripped).encode()  # noqa: SLF001
         except Exception:
             logger.debug(f"Could not strip collection response for {url}", exc_info=True)
+        return response
+
+    @staticmethod
+    def _normalize_incident_form_field_selection_item(item: Any) -> Any:
+        """Prune redundant selected_* objects for text-like form field selections."""
+        if not isinstance(item, dict):
+            return item
+
+        attributes = item.get("attributes")
+        if not isinstance(attributes, dict):
+            return item
+
+        form_field = attributes.get("form_field")
+        if not isinstance(form_field, dict):
+            return item
+
+        if form_field.get("input_kind") not in {"text", "textarea"}:
+            return item
+
+        normalized_attributes = dict(attributes)
+        for key in (
+            "selected_groups",
+            "selected_options",
+            "selected_services",
+            "selected_functionalities",
+            "selected_catalog_entities",
+            "selected_users",
+            "selected_environments",
+            "selected_causes",
+            "selected_incident_types",
+        ):
+            normalized_attributes.pop(key, None)
+
+        normalized_item = dict(item)
+        normalized_item["attributes"] = normalized_attributes
+        return normalized_item
+
+    @classmethod
+    def _normalize_incident_form_field_selection_payload(cls, payload: Any) -> Any:
+        """Normalize form field selection payloads that may contain one item or many."""
+        if not isinstance(payload, dict):
+            return payload
+
+        data = payload.get("data")
+        if isinstance(data, dict):
+            normalized_payload = dict(payload)
+            normalized_payload["data"] = cls._normalize_incident_form_field_selection_item(data)
+            return normalized_payload
+
+        if isinstance(data, list):
+            normalized_payload = dict(payload)
+            normalized_payload["data"] = [
+                cls._normalize_incident_form_field_selection_item(item) for item in data
+            ]
+            return normalized_payload
+
+        return payload
+
+    @classmethod
+    def _maybe_normalize_incident_form_field_selection_response(
+        cls, method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Normalize noisy incident form field selection responses."""
+        if method.upper() not in {"GET", "POST", "PUT", "PATCH"} or not response.is_success:
+            return response
+
+        path = cls._path_for_url(url)
+        if not cls._is_incident_form_field_selection_endpoint(path):
+            return response
+
+        try:
+            payload = response.json()
+            normalized = cls._normalize_incident_form_field_selection_payload(payload)
+            response._content = json.dumps(normalized).encode()  # noqa: SLF001
+        except Exception:
+            logger.debug(
+                f"Could not normalize incident form field selection response for {url}",
+                exc_info=True,
+            )
         return response
 
     async def get(self, url: str, **kwargs):
@@ -867,6 +1038,9 @@ class AuthenticatedHTTPXClient:
 
         response = self._maybe_strip_alert_response(request.method, str(request.url), response)
         response = self._maybe_strip_collection_response(request.method, str(request.url), response)
+        response = self._maybe_normalize_incident_form_field_selection_response(
+            request.method, str(request.url), response
+        )
         return response
 
     async def __aenter__(self):
