@@ -5,6 +5,21 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.7] - Released 2026-05-08
+
+### Fixed
+
+- **Hosted Streamable HTTP Session Accumulation**: Defaulted hosted streamable HTTP to stateless mode so the server no longer accumulates long-lived MCP sessions when clients do not explicitly terminate them
+- **Full Hosted HTTP Coverage**: Applied the stateless hosted default to both dual-transport deployments and direct hosted `streamable-http` mode for consistent leak mitigation
+
+### Configuration
+
+- **Hosted Docker Default**: Set `FASTMCP_STATELESS_HTTP=true` in the Docker image so standard hosted deployments use the safer stateless configuration by default while still allowing explicit operator override
+
+### Testing
+
+- **Hosted Transport Coverage**: Added focused tests for hosted stateless defaults and explicit `FASTMCP_STATELESS_HTTP` override behavior across both transport entry paths
+
 ## [2.3.6] - Released 2026-05-07
 
 ### Features
