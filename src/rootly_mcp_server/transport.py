@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import contextvars
+import hashlib
 import json
 import logging
 import os
 import re
+import time
 from typing import Any
 
 import httpx
@@ -248,7 +250,9 @@ class AuthCaptureMiddleware:
     are unavailable in async child contexts.
     """
 
-    _TOKEN_CACHE_TTL = 300
+    _POSITIVE_CACHE_TTL = 300
+    _NEGATIVE_CACHE_TTL = 60
+    _MAX_CACHE_SIZE = 10_000
 
     def __init__(self, app):
         self.app = app
@@ -263,19 +267,20 @@ class AuthCaptureMiddleware:
             self._code_mode_path,
         }
         self._base_url = os.getenv("ROOTLY_BASE_URL", "https://api.rootly.com")
-        self._validated_tokens: dict[str, float] = {}
+        # Maps token_hash -> (timestamp, is_valid)
+        self._token_cache: dict[str, tuple[float, bool]] = {}
 
     async def _validate_token_upstream(self, auth_header: str) -> bool:
         """Probe the Rootly API to verify the Bearer token is valid."""
-        import hashlib
-        import time
-
-        token_hash = hashlib.sha256(auth_header.encode()).hexdigest()[:16]
+        token_hash = hashlib.sha256(auth_header.encode()).hexdigest()
         now = time.monotonic()
 
-        cached_at = self._validated_tokens.get(token_hash)
-        if cached_at is not None and (now - cached_at) < self._TOKEN_CACHE_TTL:
-            return True
+        cached = self._token_cache.get(token_hash)
+        if cached is not None:
+            cached_at, was_valid = cached
+            ttl = self._POSITIVE_CACHE_TTL if was_valid else self._NEGATIVE_CACHE_TTL
+            if (now - cached_at) < ttl:
+                return was_valid
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -286,17 +291,27 @@ class AuthCaptureMiddleware:
                         "Accept": "application/vnd.api+json",
                     },
                 )
-            if resp.is_success:
-                self._validated_tokens[token_hash] = now
-                if len(self._validated_tokens) > 10000:
-                    cutoff = now - self._TOKEN_CACHE_TTL
-                    self._validated_tokens = {
-                        k: v for k, v in self._validated_tokens.items() if v > cutoff
-                    }
-                return True
+            is_valid = resp.is_success
         except Exception:
             logger.warning("Token validation probe failed, rejecting request")
-        return False
+            is_valid = False
+
+        self._token_cache[token_hash] = (now, is_valid)
+        self._evict_cache(now)
+        return is_valid
+
+    def _evict_cache(self, now: float) -> None:
+        """Remove expired entries then enforce hard size cap."""
+        if len(self._token_cache) <= self._MAX_CACHE_SIZE:
+            return
+        self._token_cache = {
+            k: (ts, valid)
+            for k, (ts, valid) in self._token_cache.items()
+            if (now - ts) < (self._POSITIVE_CACHE_TTL if valid else self._NEGATIVE_CACHE_TTL)
+        }
+        if len(self._token_cache) > self._MAX_CACHE_SIZE:
+            sorted_entries = sorted(self._token_cache.items(), key=lambda x: x[1][0])
+            self._token_cache = dict(sorted_entries[-self._MAX_CACHE_SIZE :])
 
     async def __call__(self, scope, receive, send):
         path = _normalize_path(str(scope.get("path", "")))
