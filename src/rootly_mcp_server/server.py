@@ -553,13 +553,6 @@ def create_rootly_mcp_server(
                 {
                     "resource": mcp_server_url,
                     "authorization_servers": [derive_oauth_server_url(base_url)],
-                    "scopes_supported": [
-                        "openid",
-                        "profile",
-                        "email",
-                        "ir.incidents:read",
-                        "oc.alerts:read",
-                    ],
                     "bearer_methods_supported": ["header"],
                 },
                 headers={"Cache-Control": cache},
