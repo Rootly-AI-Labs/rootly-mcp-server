@@ -613,9 +613,12 @@ def register_oncall_tools(
 
                 rest_pages = await asyncio.gather(
                     *(_fetch_schedule_page(p) for p in range(2, total_pages + 1)),
-                    return_exceptions=False,
+                    return_exceptions=True,
                 )
                 for page_schedules in rest_pages:
+                    if isinstance(page_schedules, BaseException):
+                        # One transient page error shouldn't abort the whole handler.
+                        continue
                     all_schedules.extend(page_schedules)
 
             # Build team mapping
