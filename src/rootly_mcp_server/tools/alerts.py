@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, Protocol
+from urllib.parse import quote
 
 from pydantic import Field
 
@@ -50,40 +51,34 @@ def register_alert_tools(
             if not alert_short_id:
                 return mcp_error.tool_error("short_id is required", "validation_error")
 
-            # The Rootly API silently ignores filter[short_id], so we use
-            # filter[search] (which works) and verify the match client-side
-            # to guard against fuzzy hits on summary/description.
+            # GET /v1/alerts/{id} accepts the short_id as well as the UUID
+            # (undocumented but supported), so a single point lookup avoids
+            # listing/filtering altogether.
             response = await make_authenticated_request(
-                "GET",
-                "/v1/alerts",
-                params={
-                    "filter[search]": alert_short_id,
-                    "page[size]": 10,
-                    "fields[alerts]": "id,summary,status,started_at,ended_at,short_id,source,description,noise,alert_urgency_id,url,created_at",
-                },
+                "GET", f"/v1/alerts/{quote(alert_short_id, safe='')}"
             )
+            if response.status_code == 404:
+                return mcp_error.tool_error(
+                    f"Alert with short_id '{alert_short_id}' not found",
+                    "not_found",
+                )
             response.raise_for_status()
-            for alert in response.json().get("data", []):
-                attrs = alert.get("attributes", {})
-                if attrs.get("short_id") == alert_short_id:
-                    return {
-                        "id": alert.get("id"),
-                        "short_id": attrs.get("short_id"),
-                        "summary": attrs.get("summary"),
-                        "status": attrs.get("status"),
-                        "source": attrs.get("source"),
-                        "description": attrs.get("description"),
-                        "started_at": attrs.get("started_at"),
-                        "ended_at": attrs.get("ended_at"),
-                        "noise": attrs.get("noise"),
-                        "url": attrs.get("url"),
-                        "created_at": attrs.get("created_at"),
-                    }
 
-            return mcp_error.tool_error(
-                f"Alert with short_id '{alert_short_id}' not found",
-                "not_found",
-            )
+            data = response.json().get("data", {})
+            attrs = data.get("attributes", {})
+            return {
+                "id": data.get("id"),
+                "short_id": attrs.get("short_id"),
+                "summary": attrs.get("summary"),
+                "status": attrs.get("status"),
+                "source": attrs.get("source"),
+                "description": attrs.get("description"),
+                "started_at": attrs.get("started_at"),
+                "ended_at": attrs.get("ended_at"),
+                "noise": attrs.get("noise"),
+                "url": attrs.get("url"),
+                "created_at": attrs.get("created_at"),
+            }
 
         except Exception as e:
             error_type, error_message = mcp_error.categorize_error(e)

@@ -34,21 +34,30 @@ class FakeMCPError:
         return {"error": True, "error_type": error_type, "message": error_message}
 
 
-def _alert(short_id: str, alert_id: str = "alert-uuid", **attrs: Any) -> dict:
+def _ok_response(alert: dict) -> Mock:
+    response = Mock()
+    response.status_code = 200
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"data": alert}
+    return response
+
+
+def _alert_payload(short_id: str = "PhIQtP", alert_id: str = "alert-uuid") -> dict:
     return {
         "id": alert_id,
         "type": "alerts",
         "attributes": {
             "short_id": short_id,
-            "summary": attrs.get("summary", "test summary"),
-            "status": attrs.get("status", "triggered"),
-            "source": attrs.get("source", "datadog"),
-            "description": attrs.get("description", ""),
-            "started_at": attrs.get("started_at"),
-            "ended_at": attrs.get("ended_at"),
-            "noise": attrs.get("noise", False),
-            "url": attrs.get("url"),
-            "created_at": attrs.get("created_at"),
+            "summary": "Disk full on web-01",
+            "status": "triggered",
+            "source": "datadog",
+            "description": "free space below 5%",
+            "started_at": "2026-05-19T17:00:00Z",
+            "ended_at": None,
+            "noise": False,
+            "url": f"https://rootly.com/account/alerts/{short_id}",
+            "created_at": "2026-05-19T17:00:00Z",
+            "alert_urgency_id": "urgency-1",
         },
     }
 
@@ -63,66 +72,50 @@ def _register() -> tuple[dict, AsyncMock]:
 @pytest.mark.unit
 class TestGetAlertByShortId:
     @pytest.mark.asyncio
-    async def test_makes_single_api_call_with_search_filter(self):
+    async def test_uses_direct_point_lookup_endpoint(self):
         tools, request = _register()
-        response = Mock()
-        response.raise_for_status.return_value = None
-        response.json.return_value = {"data": [_alert(short_id="PhIQtP")]}
-        request.return_value = response
+        request.return_value = _ok_response(_alert_payload(short_id="PhIQtP"))
 
         result = await tools["get_alert_by_short_id"]("PhIQtP")
 
         assert request.call_count == 1
-        _, kwargs = request.call_args
-        assert kwargs["params"]["filter[search]"] == "PhIQtP"
-        assert "page[number]" not in kwargs["params"]
+        args, kwargs = request.call_args
+        assert args == ("GET", "/v1/alerts/PhIQtP")
+        # No list params, no filter — pure point GET.
+        assert "params" not in kwargs or not kwargs.get("params")
         assert result["short_id"] == "PhIQtP"
+        assert result["summary"] == "Disk full on web-01"
 
     @pytest.mark.asyncio
     async def test_extracts_short_id_from_url(self):
         tools, request = _register()
-        response = Mock()
-        response.raise_for_status.return_value = None
-        response.json.return_value = {"data": [_alert(short_id="PhIQtP")]}
-        request.return_value = response
+        request.return_value = _ok_response(_alert_payload(short_id="PhIQtP"))
 
         result = await tools["get_alert_by_short_id"](
             "https://rootly.com/account/alerts/PhIQtP"
         )
 
-        _, kwargs = request.call_args
-        assert kwargs["params"]["filter[search]"] == "PhIQtP"
+        args, _ = request.call_args
+        assert args == ("GET", "/v1/alerts/PhIQtP")
         assert result["short_id"] == "PhIQtP"
 
     @pytest.mark.asyncio
-    async def test_filters_out_fuzzy_search_false_positives(self):
-        """filter[search] is fuzzy across summary/description.
-        We must verify the short_id exactly, not return the first hit.
-        """
+    async def test_url_encodes_short_id(self):
+        """Defensive: even though short_ids are alphanumeric in practice,
+        anything reaching the path segment must be URL-encoded."""
         tools, request = _register()
-        response = Mock()
-        response.raise_for_status.return_value = None
-        # Search returns an alert whose summary contains "PhIQtP" but
-        # whose short_id is different.
-        response.json.return_value = {
-            "data": [
-                _alert(short_id="ABCxyz", summary="related to alert PhIQtP"),
-                _alert(short_id="PhIQtP", summary="the actual one"),
-            ]
-        }
-        request.return_value = response
+        request.return_value = _ok_response(_alert_payload(short_id="x/y"))
 
-        result = await tools["get_alert_by_short_id"]("PhIQtP")
+        await tools["get_alert_by_short_id"]("a b")
 
-        assert result["short_id"] == "PhIQtP"
-        assert result["summary"] == "the actual one"
+        args, _ = request.call_args
+        assert args == ("GET", "/v1/alerts/a%20b")
 
     @pytest.mark.asyncio
-    async def test_returns_not_found_in_a_single_call(self):
+    async def test_returns_not_found_on_404(self):
         tools, request = _register()
         response = Mock()
-        response.raise_for_status.return_value = None
-        response.json.return_value = {"data": []}
+        response.status_code = 404
         request.return_value = response
 
         result = await tools["get_alert_by_short_id"]("DOESNTEXIST")
