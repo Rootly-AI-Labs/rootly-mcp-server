@@ -1266,6 +1266,70 @@ def register_oncall_tools(
     _lookup_maps_lock = asyncio.Lock()
 
     # Helper function to fetch users and schedules for enrichment
+    async def _fetch_all_pages(
+        path: str,
+        semaphore: asyncio.Semaphore,
+        max_pages: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Fetch up to ``max_pages`` of a paginated JSON:API resource.
+
+        Page 1 is awaited first so we can read ``meta.total_pages``; any
+        remaining pages within ``max_pages`` are fetched concurrently
+        through ``semaphore``. Returns the aggregated ``data`` array.
+        """
+        first = await make_authenticated_request(
+            "GET", path, params={"page[size]": 100, "page[number]": 1}
+        )
+        if not first or first.status_code != 200:
+            return []
+        first_data = first.json()
+        items: list[dict[str, Any]] = list(first_data.get("data", []))
+
+        # Don't fan out if the first page is short - matches the legacy
+        # "< 100 items means we're done" termination signal.
+        if len(items) < 100:
+            return items
+
+        # Trust meta.total_pages when provided. When the field is missing
+        # or unparseable, fall back to fetching up to max_pages — preserves
+        # the legacy "keep going until a short page" semantics for APIs
+        # that don't return pagination metadata. Pages past the real end
+        # just come back empty, harmlessly.
+        meta = first_data.get("meta") or {}
+        total_pages_raw = meta.get("total_pages")
+        if total_pages_raw is None:
+            total_pages = max_pages
+        else:
+            try:
+                total_pages = int(total_pages_raw)
+            except (TypeError, ValueError):
+                total_pages = max_pages
+        total_pages = min(max(total_pages, 1), max_pages)
+        if total_pages <= 1:
+            return items
+
+        async def _fetch_page(page_number: int) -> list[dict[str, Any]]:
+            async with semaphore:
+                response = await make_authenticated_request(
+                    "GET",
+                    path,
+                    params={"page[size]": 100, "page[number]": page_number},
+                )
+            if not response or response.status_code != 200:
+                return []
+            return list(response.json().get("data", []))
+
+        rest = await asyncio.gather(
+            *(_fetch_page(p) for p in range(2, total_pages + 1)),
+            return_exceptions=True,
+        )
+        for page_items in rest:
+            if isinstance(page_items, BaseException):
+                # One transient page error shouldn't drop the whole resource.
+                continue
+            items.extend(page_items)
+        return items
+
     async def _fetch_users_and_schedules_maps() -> tuple[
         dict[str, Any], dict[str, Any], dict[str, Any]
     ]:
@@ -1299,59 +1363,35 @@ def register_oncall_tools(
                     _lookup_maps_cache["data"],
                 )
 
-            users_map = {}
-            schedules_map = {}
-            teams_map = {}
+            # Users, schedules, and teams have no dependency on each other,
+            # so fetch them concurrently. Within each, pagination after the
+            # first page also fans out. A shared semaphore caps total
+            # concurrency to avoid hammering upstream.
+            request_semaphore = asyncio.Semaphore(10)
+            users, schedules, teams = await asyncio.gather(
+                _fetch_all_pages("/v1/users", request_semaphore),
+                _fetch_all_pages("/v1/schedules", request_semaphore),
+                _fetch_all_pages("/v1/teams", request_semaphore),
+            )
 
-            # Fetch all users with pagination
-            page = 1
-            while page <= 10:
-                users_response = await make_authenticated_request(
-                    "GET", "/v1/users", params={"page[size]": 100, "page[number]": page}
-                )
-                if users_response and users_response.status_code == 200:
-                    users_data = users_response.json()
-                    for user in users_data.get("data", []):
-                        users_map[user.get("id")] = user
-                    if len(users_data.get("data", [])) < 100:
-                        break
-                    page += 1
-                else:
-                    break
+            users_map: dict[str, Any] = {}
+            for u in users:
+                uid = u.get("id")
+                if isinstance(uid, str):
+                    users_map[uid] = u
 
-            # Fetch all schedules with pagination
-            page = 1
-            while page <= 10:
-                schedules_response = await make_authenticated_request(
-                    "GET", "/v1/schedules", params={"page[size]": 100, "page[number]": page}
-                )
-                if schedules_response and schedules_response.status_code == 200:
-                    schedules_data = schedules_response.json()
-                    for schedule in schedules_data.get("data", []):
-                        schedules_map[schedule.get("id")] = schedule
-                    if len(schedules_data.get("data", [])) < 100:
-                        break
-                    page += 1
-                else:
-                    break
+            schedules_map: dict[str, Any] = {}
+            for s in schedules:
+                sid = s.get("id")
+                if isinstance(sid, str):
+                    schedules_map[sid] = s
 
-            # Fetch all teams with pagination
-            page = 1
-            while page <= 10:
-                teams_response = await make_authenticated_request(
-                    "GET", "/v1/teams", params={"page[size]": 100, "page[number]": page}
-                )
-                if teams_response and teams_response.status_code == 200:
-                    teams_data = teams_response.json()
-                    for team in teams_data.get("data", []):
-                        teams_map[team.get("id")] = team
-                    if len(teams_data.get("data", [])) < 100:
-                        break
-                    page += 1
-                else:
-                    break
+            teams_map: dict[str, Any] = {}
+            for t in teams:
+                tid = t.get("id")
+                if isinstance(tid, str):
+                    teams_map[tid] = t
 
-            # Cache the result
             result = (users_map, schedules_map, teams_map)
             _lookup_maps_cache["data"] = result
             _lookup_maps_cache["timestamp"] = now

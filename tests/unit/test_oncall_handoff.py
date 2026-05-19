@@ -574,3 +574,183 @@ class TestListShifts:
         assert result["error_type"] == "validation_error"
         assert "page_number must be >= 1" in result["message"]
         request.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestLookupMapsHelper:
+    """Tests for the internal _fetch_users_and_schedules_maps helper.
+
+    Exercised indirectly through list_shifts, which calls the helper to
+    enrich its response. We assert on the call pattern observed on the
+    mocked make_authenticated_request to verify pagination and caching
+    behavior.
+    """
+
+    @staticmethod
+    def _register() -> tuple[dict[str, Any], AsyncMock]:
+        mcp = FakeMCP()
+        request = AsyncMock()
+        register_oncall_tools(
+            mcp=mcp,
+            make_authenticated_request=request,
+            mcp_error=FakeMCPError(),
+        )
+        return mcp.tools, request
+
+    @staticmethod
+    def _ok(payload: dict[str, Any]) -> Mock:
+        r = Mock()
+        r.status_code = 200
+        r.json.return_value = payload
+        return r
+
+    @staticmethod
+    def _resource(kind: str, count: int, total_pages: int = 1) -> dict[str, Any]:
+        return {
+            "data": [
+                {"id": f"{kind}-{i}", "type": kind, "attributes": {"name": f"{kind} {i}"}}
+                for i in range(count)
+            ],
+            "meta": {"total_pages": total_pages},
+        }
+
+    async def test_fans_out_additional_pages_when_first_page_is_full(self):
+        """When page 1 returns 100 items with total_pages > 1, the helper
+        fetches the remaining pages — and merges them into the lookup."""
+        tools, request = self._register()
+
+        def responder(method, url, params=None, **_):
+            assert params is not None
+            page = params.get("page[number]", 1)
+            if url == "/v1/users":
+                # Page 1 full → must fan out; page 2 fills the rest.
+                if page == 1:
+                    return self._ok(self._resource("users", 100, total_pages=2))
+                return self._ok(self._resource("users", 50, total_pages=2))
+            if url in ("/v1/schedules", "/v1/teams"):
+                return self._ok({"data": [], "meta": {"total_pages": 1}})
+            if url == "/v1/shifts":
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
+            raise AssertionError(f"unexpected call: {url}")
+
+        request.side_effect = responder
+        await tools["list_shifts"](from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z")
+
+        users_calls = [c for c in request.call_args_list if c.args[1] == "/v1/users"]
+        pages_fetched = sorted(c.kwargs["params"]["page[number]"] for c in users_calls)
+        assert pages_fetched == [1, 2]
+
+    async def test_falls_back_to_max_pages_when_meta_total_pages_missing(self):
+        """If page 1 is full but meta omits total_pages, we must still
+        keep fetching — matches the legacy 'keep going until a short
+        page' semantics so APIs without pagination metadata aren't
+        silently truncated."""
+        tools, request = self._register()
+
+        def responder(method, url, params=None, **_):
+            assert params is not None
+            if url == "/v1/users":
+                page = params["page[number]"]
+                if page == 1:
+                    # Full page, but no meta.total_pages — old behaviour
+                    # would keep fetching; new behaviour must too.
+                    return self._ok({"data": [{"id": f"u-{i}"} for i in range(100)]})
+                # Later pages return short → real end of data.
+                return self._ok({"data": [{"id": f"u-page{page}"}]})
+            if url in ("/v1/schedules", "/v1/teams"):
+                return self._ok({"data": [], "meta": {"total_pages": 1}})
+            if url == "/v1/shifts":
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
+            raise AssertionError(f"unexpected call: {url}")
+
+        request.side_effect = responder
+        await tools["list_shifts"](from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z")
+
+        users_calls = [c for c in request.call_args_list if c.args[1] == "/v1/users"]
+        # Must have fetched more than just page 1.
+        assert len(users_calls) > 1
+
+    async def test_continues_when_one_page_fetch_raises(self):
+        """A transient error on any non-first page must not bring down
+        the whole resource fetch — surviving pages are still merged."""
+        tools, request = self._register()
+
+        def responder(method, url, params=None, **_):
+            assert params is not None
+            if url == "/v1/users":
+                page = params["page[number]"]
+                if page == 1:
+                    return self._ok(
+                        {"data": [{"id": f"u-{i}"} for i in range(100)], "meta": {"total_pages": 3}}
+                    )
+                if page == 2:
+                    raise RuntimeError("upstream blip")
+                # page 3
+                return self._ok({"data": [{"id": "u-200"}]})
+            if url in ("/v1/schedules", "/v1/teams"):
+                return self._ok({"data": [], "meta": {"total_pages": 1}})
+            if url == "/v1/shifts":
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
+            raise AssertionError(f"unexpected call: {url}")
+
+        request.side_effect = responder
+        # Should not raise even though page 2 errored.
+        result = await tools["list_shifts"](
+            from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z"
+        )
+        # Got a normal-shaped response, not a tool error.
+        assert "error" not in result or result.get("error") is not True
+
+    async def test_does_not_fetch_additional_pages_when_first_page_is_short(self):
+        """A short first page (<100 items) must NOT trigger any followup
+        fetches. Preserves the legacy termination signal."""
+        tools, request = self._register()
+
+        def responder(method, url, params=None, **_):
+            if url == "/v1/users":
+                # Short page → no need to fan out, even if meta lies.
+                return self._ok(self._resource("users", 3, total_pages=5))
+            if url in ("/v1/schedules", "/v1/teams"):
+                return self._ok({"data": [], "meta": {"total_pages": 1}})
+            if url == "/v1/shifts":
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
+            raise AssertionError(f"unexpected call: {url}")
+
+        request.side_effect = responder
+        await tools["list_shifts"](from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z")
+
+        users_calls = [c for c in request.call_args_list if c.args[1] == "/v1/users"]
+        assert len(users_calls) == 1
+
+    async def test_caches_lookup_results_across_calls(self):
+        """Second call within the cache TTL must not re-fetch any of the
+        three resources."""
+        tools, request = self._register()
+
+        def responder(method, url, params=None, **_):
+            if url in ("/v1/users", "/v1/schedules", "/v1/teams"):
+                return self._ok({"data": [], "meta": {"total_pages": 1}})
+            if url == "/v1/shifts":
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
+            raise AssertionError(f"unexpected call: {url}")
+
+        request.side_effect = responder
+
+        await tools["list_shifts"](from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z")
+        first_lookup_calls = sum(
+            1
+            for c in request.call_args_list
+            if c.args[1] in ("/v1/users", "/v1/schedules", "/v1/teams")
+        )
+
+        await tools["list_shifts"](from_date="2026-02-09T00:00:00Z", to_date="2026-02-12T00:00:00Z")
+        total_lookup_calls = sum(
+            1
+            for c in request.call_args_list
+            if c.args[1] in ("/v1/users", "/v1/schedules", "/v1/teams")
+        )
+
+        # Three resources fetched once on the first call, zero on the second.
+        assert first_lookup_calls == 3
+        assert total_lookup_calls == 3
