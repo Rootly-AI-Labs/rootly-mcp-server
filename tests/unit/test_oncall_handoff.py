@@ -820,9 +820,7 @@ class TestGetOncallShiftMetrics:
             if url == "/v1/teams":
                 return self._ok({"data": [], "meta": {"total_pages": 1}})
             if url == "/v1/shifts":
-                return self._ok(
-                    {"data": [], "included": [], "meta": {"total_pages": 1}}
-                )
+                return self._ok({"data": [], "included": [], "meta": {"total_pages": 1}})
             raise AssertionError(f"unexpected call: {url}")
 
         request.side_effect = responder
