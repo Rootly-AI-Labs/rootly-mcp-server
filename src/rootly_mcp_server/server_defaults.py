@@ -135,38 +135,6 @@ def collect_operation_ids(paths: dict) -> set[str]:
     return op_ids
 
 
-def validate_tool_names(
-    enabled_tools: set[str],
-    available_operations: dict,
-    extra_known_tools: set[str] | None = None,
-) -> tuple[set[str], list[str]]:
-    """
-    Validate tool names against available OpenAPI operations and any curated extras.
-
-    Args:
-        enabled_tools: Set of tool names to validate
-        available_operations: OpenAPI paths dict from swagger spec
-        extra_known_tools: Additional valid tool names registered outside the OpenAPI
-            spec (e.g. curated `@mcp.tool()` registrations). Curated tools won't have
-            an operationId in the spec, so they must be passed in here to avoid being
-            flagged as invalid.
-
-    Returns:
-        tuple: (valid_tools, invalid_tools)
-    """
-    if not enabled_tools:
-        return set(), []
-
-    available_tool_names = collect_operation_ids(available_operations)
-    if extra_known_tools:
-        available_tool_names |= extra_known_tools
-
-    valid_tools = enabled_tools & available_tool_names
-    invalid_tools = list(enabled_tools - available_tool_names)
-
-    return valid_tools, invalid_tools
-
-
 def enabled_tools_from_env() -> set[str] | None:
     """Return an optional explicit allowlist of MCP tool names to expose."""
     return _parse_csv_set(os.getenv(EnvVars.ENABLED_TOOLS))

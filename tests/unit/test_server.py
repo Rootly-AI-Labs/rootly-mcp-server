@@ -469,9 +469,7 @@ class TestBundledIncidentFormFieldSelectionTools:
 
         assert "list_incidents" in tool_names
 
-    async def test_list_incidents_legacy_allowlist_exposes_both_names(
-        self, mock_environment_token
-    ):
+    async def test_list_incidents_legacy_allowlist_exposes_both_names(self, mock_environment_token):
         """Posture A: legacy `listIncidents` in the allowlist must keep both
         the proxy and the canonical name exposed during the deprecation window."""
         server = create_rootly_mcp_server(

@@ -100,9 +100,7 @@ def _strip_curated_override_operations(
         ]
         for method in methods_to_drop:
             path_item.pop(method, None)
-        if not any(
-            m.lower() in ("get", "post", "put", "patch", "delete") for m in path_item
-        ):
+        if not any(m.lower() in ("get", "post", "put", "patch", "delete") for m in path_item):
             paths_to_drop.append(path)
     for path in paths_to_drop:
         del paths[path]
@@ -463,10 +461,13 @@ def create_rootly_mcp_server(
     swagger_spec = _load_swagger_spec(swagger_path)
     logger.info(f"Loaded Swagger spec with {len(swagger_spec.get('paths', {}))} total paths")
 
-    # When an allowlist is provided, restrict the OpenAPI spec filter to entries that
-    # are real operationIds. Curated tool names (registered later via @mcp.tool) won't
-    # appear in the spec — we let them through to the post-registration validation step
-    # below instead of wiping the autogen spec to empty here.
+    # When an allowlist is provided, build the subset that matches real OpenAPI
+    # operationIds; curated tool names (registered later via @mcp.tool) won't appear
+    # in the spec and are validated separately after registration.
+    #
+    # An empty subset is meaningful: it tells `_filter_openapi_spec` to drop every
+    # autogen operation, which is the right behavior when the caller asked only for
+    # curated tools (e.g. `ROOTLY_MCP_ENABLED_TOOLS=list_incidents`).
     autogen_allowlist: set[str] | None = None
     if enabled_tools:
         all_op_ids = server_defaults.collect_operation_ids(swagger_spec.get("paths", {}))
