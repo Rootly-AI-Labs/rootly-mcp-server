@@ -707,7 +707,9 @@ class TestStructuredListIncidentsTool:
         )
 
         request.assert_awaited_once()
-        params = request.await_args.kwargs["params"]
+        await_args = request.await_args
+        assert await_args is not None
+        params = await_args.kwargs["params"]
         assert params["filter[status]"] == "investigating"
         assert params["filter[severity]"] == "high"
         assert params["filter[started_at][gte]"] == "2026-01-01T00:00:00Z"
