@@ -318,7 +318,11 @@ class AuthCaptureMiddleware:
         cached = self._token_cache.get(token_hash)
         if cached is not None:
             cached_at, authenticated_user = cached
-            ttl = self._POSITIVE_CACHE_TTL if authenticated_user else self._NEGATIVE_CACHE_TTL
+            ttl = (
+                self._POSITIVE_CACHE_TTL
+                if authenticated_user is not None
+                else self._NEGATIVE_CACHE_TTL
+            )
             if (now - cached_at) < ttl:
                 return dict(authenticated_user) if authenticated_user else None
 

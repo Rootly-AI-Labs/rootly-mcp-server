@@ -99,10 +99,10 @@ def maybe_enable_mcpcat_tracking(server, project_id: str | None, logger: logging
         )
         return
 
-    options = mcpcat_types.MCPCatOptions(
-        identify=build_mcpcat_identify_callback(mcpcat_types.UserIdentity),
-    )
     try:
+        options = mcpcat_types.MCPCatOptions(
+            identify=build_mcpcat_identify_callback(mcpcat_types.UserIdentity),
+        )
         mcpcat.track(server, project_id, options)
     except Exception:
         logger.warning("MCPcat tracking could not be enabled; skipping", exc_info=True)
