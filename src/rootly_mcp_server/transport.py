@@ -324,7 +324,7 @@ class AuthCaptureMiddleware:
                 else self._NEGATIVE_CACHE_TTL
             )
             if (now - cached_at) < ttl:
-                return dict(authenticated_user) if authenticated_user else None
+                return dict(authenticated_user) if authenticated_user is not None else None
 
         existing = self._inflight.get(token_hash)
         if existing is not None:
