@@ -5,6 +5,25 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.9] - Released 2026-05-21
+
+### Performance
+
+- **Hosted Default Tool Surface Slimmed**: Default hosted deployments now expose a curated core profile of 55 high-usage tools instead of the full 200+ tool surface, improving MCP client tool-discovery performance while preserving a broad self-hosted default
+- **Hosted and Self-Hosted Defaults Split**: Hosted/serverless instances now default to the slim allowlist, while local and self-hosted deployments continue to expose the full tool catalog unless explicitly overridden
+
+### Configuration
+
+- **Hosted Allowlist Override Behavior**: `ROOTLY_MCP_ENABLED_TOOLS` now cleanly overrides the hosted default profile when operators want a narrower or broader remote tool surface
+
+### Documentation
+
+- **README Deployment Guidance Updated**: Documented the new hosted-versus-self-hosted tool defaults, the hosted override behavior, and the current approximate tool counts for each mode
+
+### Dependencies
+
+- **Lockfile Sync**: Regenerated `uv.lock` so the lockfile matches the current pinned versions in `pyproject.toml`, including `requests==2.34.0` and `pydantic==2.13.4`
+
 ## [2.3.8] - Released 2026-05-19
 
 ### Security
