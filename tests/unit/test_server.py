@@ -34,6 +34,7 @@ from rootly_mcp_server.server import (
     _validate_bearer_auth_header,
     create_rootly_mcp_server,
 )
+from rootly_mcp_server.server_defaults import DEFAULT_HOSTED_ENABLED_TOOLS
 from rootly_mcp_server.spec_transform import audit_openapi_spec, has_openapi_audit_findings
 from rootly_mcp_server.utils import OAUTH_PROTECTED_RESOURCE_PATH
 
@@ -432,7 +433,7 @@ class TestBundledIncidentFormFieldSelectionTools:
         tools = await server.list_tools()
         tool_names = {tool.name for tool in tools}
 
-        assert 50 <= len(tool_names) <= 60
+        assert tool_names == set(DEFAULT_HOSTED_ENABLED_TOOLS)
         assert "createIncidentActionItem" in tool_names
         assert "updateIncident" in tool_names
         assert "search_incidents" in tool_names

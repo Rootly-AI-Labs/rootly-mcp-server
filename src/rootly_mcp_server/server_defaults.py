@@ -84,7 +84,6 @@ DEFAULT_HOSTED_ENABLED_TOOLS: frozenset[str] = frozenset(
         "listIncidentEvents",
         "listIncidentFormFieldSelections",
         "listIncidentTypes",
-        "listIncidents",
         "listScheduleRotationActiveDays",
         "listScheduleRotationUsers",
         "listScheduleRotations",
