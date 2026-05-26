@@ -812,11 +812,11 @@ class AuthenticatedHTTPXClient:
             return normalized or None
         if isinstance(value, list | tuple):
             normalized_items = [
-                item
-                for item in (
+                normalized
+                for normalized in (
                     AuthenticatedHTTPXClient._normalize_query_param_value(item) for item in value
                 )
-                if item is not None
+                if normalized is not None
             ]
             return normalized_items or None
         return value
