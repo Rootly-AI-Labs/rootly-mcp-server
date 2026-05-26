@@ -797,6 +797,30 @@ class AuthenticatedHTTPXClient:
             return None
         return api_token
 
+    @staticmethod
+    def _normalize_query_param_value(value: Any) -> Any:
+        """Drop blank query values while preserving meaningful falsey values.
+
+        Rootly endpoints may return 500s when passed empty-string filters such as
+        ``filter[status]=``. We treat blank strings and empty collections as
+        omitted query parameters, while keeping values like ``0`` and ``False``.
+        """
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        if isinstance(value, list | tuple):
+            normalized_items = [
+                normalized
+                for normalized in (
+                    AuthenticatedHTTPXClient._normalize_query_param_value(item) for item in value
+                )
+                if normalized is not None
+            ]
+            return normalized_items or None
+        return value
+
     def _transform_params(self, params: dict[str, Any] | None) -> dict[str, Any] | None:
         """Transform sanitized parameter names back to original names."""
         if not params or not self.parameter_mapping:
@@ -804,9 +828,13 @@ class AuthenticatedHTTPXClient:
 
         transformed = {}
         for key, value in params.items():
+            normalized_value = self._normalize_query_param_value(value)
+            if normalized_value is None:
+                logger.debug(f"Dropping empty query parameter: '{key}'")
+                continue
             # Use the original name if we have a mapping, otherwise keep the sanitized name
             original_key = self.parameter_mapping.get(key, key)
-            transformed[original_key] = value
+            transformed[original_key] = normalized_value
             if original_key != key:
                 logger.debug(f"Transformed parameter: '{key}' -> '{original_key}'")
         return transformed
@@ -1166,8 +1194,12 @@ class AuthenticatedHTTPXClient:
         if request.url.params:
             original_params = {}
             for key, value in request.url.params.items():
+                normalized_value = self._normalize_query_param_value(value)
+                if normalized_value is None:
+                    logger.debug(f"Dropping empty URL query parameter: '{key}'")
+                    continue
                 original_key = self.parameter_mapping.get(key, key)
-                original_params[original_key] = value
+                original_params[original_key] = normalized_value
             # Rebuild URL with transformed parameters
             new_url = str(request.url).split("?")[0]
             if original_params:

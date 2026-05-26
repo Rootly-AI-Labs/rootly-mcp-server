@@ -507,7 +507,17 @@ class TestTransportModule:
         with patch.object(
             transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
         ):
-            client = transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+            client = transport.AuthenticatedHTTPXClient(
+                hosted=False,
+                transport="stdio",
+                parameter_mapping={
+                    "filter_status": "filter[status]",
+                    "filter_source": "filter[source]",
+                    "filter_services": "filter[services]",
+                    "page_number": "page[number]",
+                    "page_size": "page[size]",
+                },
+            )
             client.client.request = AsyncMock(return_value=response)
 
             returned = await client.request("GET", "/v1/incidents")
@@ -615,6 +625,82 @@ class TestTransportModule:
             assert kwargs["json"] == {
                 "data": {"type": "workflows", "attributes": {"name": "Updated"}}
             }
+
+    def test_authenticated_client_drops_empty_query_parameters(self):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(
+                hosted=False,
+                transport="stdio",
+                parameter_mapping={
+                    "filter_status": "filter[status]",
+                    "filter_source": "filter[source]",
+                    "filter_services": "filter[services]",
+                    "page_number": "page[number]",
+                    "page_size": "page[size]",
+                },
+            )
+        assert client._transform_params(
+            {
+                "filter_status": "",
+                "filter_source": "   ",
+                "filter_services": [
+                    "svc-1",
+                    "",
+                    "svc-2",
+                ],
+                "page_number": 1,
+                "page_size": 20,
+                "include": "alert_urgency",
+            }
+        ) == {
+            "filter[services]": ["svc-1", "svc-2"],
+            "page[number]": 1,
+            "page[size]": 20,
+            "include": "alert_urgency",
+        }
+
+    @pytest.mark.asyncio
+    async def test_authenticated_client_send_drops_empty_query_parameters(self):
+        response = httpx.Response(
+            200,
+            request=httpx.Request(
+                "GET",
+                "https://api.rootly.com/v1/alerts?include=alert_urgency&page%5Bnumber%5D=1",
+            ),
+            content=b'{"data":[]}',
+        )
+
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            client = transport.AuthenticatedHTTPXClient(
+                hosted=False,
+                transport="stdio",
+                parameter_mapping={
+                    "filter_status": "filter[status]",
+                    "filter_source": "filter[source]",
+                    "page_number": "page[number]",
+                },
+            )
+            client.client.send = AsyncMock(return_value=response)
+
+            request = httpx.Request(
+                "GET",
+                "https://api.rootly.com/v1/alerts"
+                "?filter_status=&filter_source=%20%20%20&include=alert_urgency&page_number=1",
+            )
+
+            await client.send(request)
+
+            sent_request = client.client.send.call_args.args[0]
+            sent_params = dict(sent_request.url.params)
+            assert "filter[status]" not in sent_params
+            assert "filter[status]" not in str(sent_request.url)
+            assert "filter[source]" not in sent_params
+            assert sent_params["include"] == "alert_urgency"
+            assert sent_params["page[number]"] == "1"
 
     def test_sanitize_log_excerpt_redacts_tokens_and_paths(self):
         excerpt = transport._sanitize_log_excerpt(
