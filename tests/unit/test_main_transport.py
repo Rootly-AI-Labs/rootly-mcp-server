@@ -1,10 +1,12 @@
 """Tests for CLI transport normalization and config propagation in __main__."""
 
 import argparse
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from starlette.requests import Request
 
 from rootly_mcp_server.__main__ import (
     _get_sorted_tool_names,
@@ -14,6 +16,7 @@ from rootly_mcp_server.__main__ import (
     maybe_enable_mcpcat_tracking,
     normalize_transport,
     resolve_requested_hosted_tool_profile,
+    run_profiled_streamable_http_server,
     streamable_http_stateless_enabled,
 )
 
@@ -118,6 +121,16 @@ def test_resolve_requested_hosted_tool_profile_uses_header_fallback():
     )
 
     assert profile == "full"
+
+
+def test_resolve_requested_hosted_tool_profile_falls_back_to_default_on_unknown_value():
+    profile = resolve_requested_hosted_tool_profile(
+        query_params={"tool_profile": "unexpected"},
+        headers={},
+        default="slim",
+    )
+
+    assert profile == "slim"
 
 
 def test_streamable_http_defaults_hosted_mode_to_stateless_when_unset():
@@ -344,6 +357,92 @@ def test_main_hosted_streamable_http_passes_stateless_default():
     assert mock_run.call_args.kwargs["default_tool_profile"] == "full"
 
 
+def test_main_hosted_streamable_http_uses_slim_as_default_when_requested_by_env():
+    args = SimpleNamespace(
+        swagger_path=None,
+        log_level="ERROR",
+        name="Rootly",
+        transport="streamable-http",
+        debug=False,
+        base_url=None,
+        allowed_paths=None,
+        hosted=True,
+        enable_code_mode=False,
+        enable_write_tools=True,
+        enabled_tools=None,
+        list_tools=False,
+        code_mode_path=None,
+        host=False,
+    )
+    slim_server = SimpleNamespace()
+    full_server = SimpleNamespace()
+
+    with patch.dict("os.environ", {"ROOTLY_MCP_HOSTED_TOOL_PROFILE": "slim"}, clear=True):
+        with patch("rootly_mcp_server.__main__.parse_args", return_value=args):
+            with patch("rootly_mcp_server.__main__.setup_logging"):
+                with patch(
+                    "rootly_mcp_server.__main__.create_rootly_mcp_server",
+                    side_effect=[slim_server, full_server],
+                ):
+                    with patch(
+                        "rootly_mcp_server.__main__.get_hosted_auth_middleware", return_value=[]
+                    ):
+                        with patch(
+                            "rootly_mcp_server.__main__.run_profiled_streamable_http_server"
+                        ) as mock_run:
+                            main()
+
+    mock_run.assert_called_once()
+    assert mock_run.call_args.kwargs["server"] is slim_server
+    assert mock_run.call_args.kwargs["profiled_servers"] == {
+        "slim": slim_server,
+        "full": full_server,
+    }
+    assert mock_run.call_args.kwargs["default_tool_profile"] == "slim"
+
+
+def test_main_hosted_streamable_http_with_explicit_enabled_tools_skips_profiled_servers():
+    args = SimpleNamespace(
+        swagger_path=None,
+        log_level="ERROR",
+        name="Rootly",
+        transport="streamable-http",
+        debug=False,
+        base_url=None,
+        allowed_paths=None,
+        hosted=True,
+        enable_code_mode=False,
+        enable_write_tools=True,
+        enabled_tools="listTeams",
+        list_tools=False,
+        code_mode_path=None,
+        host=False,
+    )
+    main_server = SimpleNamespace(run=Mock())
+
+    with patch.dict("os.environ", {}, clear=True):
+        with patch("rootly_mcp_server.__main__.parse_args", return_value=args):
+            with patch("rootly_mcp_server.__main__.setup_logging"):
+                with patch(
+                    "rootly_mcp_server.__main__.create_rootly_mcp_server",
+                    return_value=main_server,
+                ) as mock_create:
+                    with patch(
+                        "rootly_mcp_server.__main__.get_hosted_auth_middleware", return_value=[]
+                    ):
+                        with patch(
+                            "rootly_mcp_server.__main__.run_profiled_streamable_http_server"
+                        ) as mock_profiled_run:
+                            main()
+
+    mock_create.assert_called_once()
+    mock_profiled_run.assert_not_called()
+    main_server.run.assert_called_once()
+    assert main_server.run.call_args.kwargs["transport"] == "streamable-http"
+    assert main_server.run.call_args.kwargs["stateless_http"] is True
+    assert main_server.run.call_args.kwargs["middleware"] == []
+
+
 def test_main_tracks_main_and_code_mode_servers_when_mcpcat_project_id_set():
     args = SimpleNamespace(
         swagger_path=None,
@@ -388,3 +487,157 @@ def test_main_tracks_main_and_code_mode_servers_when_mcpcat_project_id_set():
     assert mock_track.call_args_list[1].args[:2] == (slim_server, "proj_test_123")
     assert mock_track.call_args_list[2].args[:2] == (code_mode_server, "proj_test_123")
     assert mock_track.call_args_list[3].args[:2] == (slim_code_mode_server, "proj_test_123")
+
+
+@pytest.mark.asyncio
+async def test_run_profiled_streamable_http_server_routes_requests_by_profile():
+    captured: dict[str, Any] = {}
+    fake_apps: dict[str, Any] = {}
+
+    class FakeSessionManager:
+        def __init__(self, app, event_store, retry_interval, json_response, stateless):
+            self.app = app
+            self.event_store = event_store
+            self.retry_interval = retry_interval
+            self.json_response = json_response
+            self.stateless = stateless
+
+        class _RunContext:
+            async def __aenter__(self):
+                return None
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        def run(self):
+            return self._RunContext()
+
+    class FakeASGIApp:
+        def __init__(self, session_manager):
+            self.session_manager = session_manager
+            self.calls: list[str] = []
+            fake_apps[session_manager.app] = self
+
+        async def __call__(self, scope, receive, send):
+            self.calls.append(scope["query_string"].decode())
+
+    def fake_create_base_app(*, routes, middleware, debug, lifespan):
+        captured["routes"] = routes
+        captured["middleware"] = middleware
+        captured["debug"] = debug
+        captured["lifespan"] = lifespan
+        return SimpleNamespace(state=SimpleNamespace())
+
+    class FakeConfig:
+        def __init__(self, app, **kwargs):
+            captured["app"] = app
+            captured["config_kwargs"] = kwargs
+
+    class FakeServerRunner:
+        def __init__(self, config):
+            self.config = config
+
+        def run(self):
+            captured["server_run_called"] = True
+
+    fake_fastmcp = cast(Any, ModuleType("fastmcp"))
+    fake_fastmcp.settings = SimpleNamespace(
+        streamable_http_path="/mcp",
+        stateless_http=False,
+        json_response=False,
+        debug=False,
+        host="127.0.0.1",
+        port=8000,
+        log_level="INFO",
+    )
+    fake_fastmcp_http = cast(Any, ModuleType("fastmcp.server.http"))
+    fake_fastmcp_http.StreamableHTTPASGIApp = FakeASGIApp
+    fake_fastmcp_http.create_base_app = fake_create_base_app
+    fake_streamable_manager = cast(Any, ModuleType("mcp.server.streamable_http_manager"))
+    fake_streamable_manager.StreamableHTTPSessionManager = FakeSessionManager
+    fake_uvicorn = cast(Any, ModuleType("uvicorn"))
+    fake_uvicorn.Config = FakeConfig
+    fake_uvicorn.Server = FakeServerRunner
+
+    full_server = SimpleNamespace(_mcp_server="full-server", _get_additional_http_routes=lambda: [])
+    slim_server = SimpleNamespace(_mcp_server="slim-server", _get_additional_http_routes=lambda: [])
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(_message):
+        return None
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "fastmcp": fake_fastmcp,
+            "fastmcp.server.http": fake_fastmcp_http,
+            "mcp.server.streamable_http_manager": fake_streamable_manager,
+            "uvicorn": fake_uvicorn,
+        },
+        clear=False,
+    ):
+        run_profiled_streamable_http_server(
+            server=full_server,
+            log_level="ERROR",
+            middleware=[],
+            profiled_servers={"full": full_server, "slim": slim_server},
+            default_tool_profile="full",
+        )
+
+    assert captured["server_run_called"] is True
+    route = cast(Any, captured["routes"][0])
+
+    full_request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "query_string": b"",
+            "headers": [],
+        },
+        receive=receive,
+        send=send,
+    )
+    slim_request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "query_string": b"tool_profile=slim",
+            "headers": [],
+        },
+        receive=receive,
+        send=send,
+    )
+    header_request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "query_string": b"",
+            "headers": [(b"x-rootly-tool-profile", b"slim")],
+        },
+        receive=receive,
+        send=send,
+    )
+    unknown_request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/mcp",
+            "query_string": b"tool_profile=unexpected",
+            "headers": [],
+        },
+        receive=receive,
+        send=send,
+    )
+
+    await route.endpoint(full_request)
+    await route.endpoint(slim_request)
+    await route.endpoint(header_request)
+    await route.endpoint(unknown_request)
+
+    assert fake_apps["full-server"].calls == ["", "tool_profile=unexpected"]
+    assert fake_apps["slim-server"].calls == ["tool_profile=slim", ""]
