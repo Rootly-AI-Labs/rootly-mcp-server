@@ -360,15 +360,15 @@ def run_dual_http_server(
         {default_tool_profile: code_mode_server} if code_mode_server is not None else {}
     )
 
-    def _server_for_request(
-        request: Request, servers: dict[str, Any], *, default_profile: str
-    ) -> Any:
+    def _profile_for_request(
+        request: Request, available_profiles: set[str], *, default_profile: str
+    ) -> str:
         profile = resolve_requested_hosted_tool_profile(
             query_params=request.query_params,
             headers=request.headers,
             default=default_profile,
         )
-        return servers.get(profile) or servers[default_profile]
+        return profile if profile in available_profiles else default_profile
 
     async def handle_sse(scope, receive, send, selected_server) -> Response:
         async with sse_transport.connect_sse(scope, receive, send) as streams:
@@ -380,9 +380,12 @@ def run_dual_http_server(
         return Response()
 
     async def sse_endpoint(request: Request) -> Response:
-        selected_server = _server_for_request(
-            request, profiled_servers, default_profile=default_tool_profile
+        selected_profile = _profile_for_request(
+            request,
+            set(profiled_servers),
+            default_profile=default_tool_profile,
         )
+        selected_server = profiled_servers[selected_profile]
         return await handle_sse(  # noqa: SLF001
             request.scope, request.receive, request._send, selected_server
         )
@@ -403,13 +406,10 @@ def run_dual_http_server(
     }
 
     async def streamable_http_endpoint(request: Request) -> Response:
-        selected_server = _server_for_request(
-            request, profiled_servers, default_profile=default_tool_profile
-        )
-        selected_profile = next(
-            profile
-            for profile, candidate in profiled_servers.items()
-            if candidate is selected_server
+        selected_profile = _profile_for_request(
+            request,
+            set(streamable_http_apps),
+            default_profile=default_tool_profile,
         )
         selected_app = streamable_http_apps[selected_profile]
         await selected_app(request.scope, request.receive, request._send)  # noqa: SLF001
@@ -444,15 +444,10 @@ def run_dual_http_server(
         }
 
         async def code_mode_endpoint(request: Request) -> Response:
-            selected_server = _server_for_request(
+            selected_profile = _profile_for_request(
                 request,
-                profiled_code_mode_servers,
+                set(code_mode_http_apps),
                 default_profile=default_tool_profile,
-            )
-            selected_profile = next(
-                profile
-                for profile, candidate in profiled_code_mode_servers.items()
-                if candidate is selected_server
             )
             selected_app = code_mode_http_apps[selected_profile]
             await selected_app(request.scope, request.receive, request._send)  # noqa: SLF001

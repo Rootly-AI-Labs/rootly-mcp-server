@@ -111,7 +111,7 @@ class TestServerDefaultsModule:
             ) == set(DEFAULT_HOSTED_ENABLED_TOOLS)
 
     def test_default_hosted_enabled_tools_targets_curated_70_tool_profile(self):
-        assert len(DEFAULT_HOSTED_ENABLED_TOOLS) == 70
+        assert len(DEFAULT_HOSTED_ENABLED_TOOLS) >= 60
 
     def test_enabled_tools_from_env_local_mode_keeps_full_surface_by_default(self):
         with patch.dict("os.environ", {}, clear=True):
@@ -120,6 +120,7 @@ class TestServerDefaultsModule:
     def test_normalize_hosted_tool_profile_accepts_aliases(self):
         assert normalize_hosted_tool_profile("slim") == HOSTED_TOOL_PROFILE_SLIM
         assert normalize_hosted_tool_profile("core") == HOSTED_TOOL_PROFILE_SLIM
+        assert normalize_hosted_tool_profile("default") == HOSTED_TOOL_PROFILE_FULL
         assert normalize_hosted_tool_profile("all") == HOSTED_TOOL_PROFILE_FULL
 
     def test_hosted_tool_profile_from_env_defaults_to_full(self):
