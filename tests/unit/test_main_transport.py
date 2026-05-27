@@ -13,6 +13,7 @@ from rootly_mcp_server.__main__ import (
     main,
     maybe_enable_mcpcat_tracking,
     normalize_transport,
+    resolve_requested_hosted_tool_profile,
     streamable_http_stateless_enabled,
 )
 
@@ -85,6 +86,38 @@ def test_get_server_keeps_hosted_default_write_surface():
     assert mock_create.call_args is not None
     assert mock_create.call_args.kwargs["hosted"] is True
     assert mock_create.call_args.kwargs["enable_write_tools"] is True
+    assert mock_create.call_args.kwargs["enabled_tools"] is None
+
+
+def test_get_server_applies_slim_hosted_profile_from_env():
+    with patch.dict(
+        "os.environ",
+        {"ROOTLY_HOSTED": "true", "ROOTLY_MCP_HOSTED_TOOL_PROFILE": "slim"},
+        clear=True,
+    ):
+        with patch("rootly_mcp_server.__main__.create_rootly_mcp_server") as mock_create:
+            get_server()
+
+    assert mock_create.call_args is not None
+    assert mock_create.call_args.kwargs["enabled_tools"] is not None
+
+
+def test_resolve_requested_hosted_tool_profile_prefers_query_param():
+    profile = resolve_requested_hosted_tool_profile(
+        query_params={"tool_profile": "slim"},
+        headers={"x-rootly-tool-profile": "full"},
+    )
+
+    assert profile == "slim"
+
+
+def test_resolve_requested_hosted_tool_profile_uses_header_fallback():
+    profile = resolve_requested_hosted_tool_profile(
+        query_params={},
+        headers={"x-rootly-tool-profile": "all"},
+    )
+
+    assert profile == "full"
 
 
 def test_streamable_http_defaults_hosted_mode_to_stateless_when_unset():
@@ -284,23 +317,31 @@ def test_main_hosted_streamable_http_passes_stateless_default():
         code_mode_path=None,
         host=False,
     )
-    fake_server = SimpleNamespace(run=Mock())
+    main_server = SimpleNamespace()
+    slim_server = SimpleNamespace()
 
     with patch.dict("os.environ", {}, clear=True):
         with patch("rootly_mcp_server.__main__.parse_args", return_value=args):
             with patch("rootly_mcp_server.__main__.setup_logging"):
                 with patch(
                     "rootly_mcp_server.__main__.create_rootly_mcp_server",
-                    return_value=fake_server,
+                    side_effect=[main_server, slim_server],
                 ):
                     with patch(
                         "rootly_mcp_server.__main__.get_hosted_auth_middleware", return_value=[]
                     ):
-                        main()
+                        with patch(
+                            "rootly_mcp_server.__main__.run_profiled_streamable_http_server"
+                        ) as mock_run:
+                            main()
 
-    fake_server.run.assert_called_once()
-    assert fake_server.run.call_args.kwargs["transport"] == "streamable-http"
-    assert fake_server.run.call_args.kwargs["stateless_http"] is True
+    mock_run.assert_called_once()
+    assert mock_run.call_args.kwargs["server"] is main_server
+    assert mock_run.call_args.kwargs["profiled_servers"] == {
+        "full": main_server,
+        "slim": slim_server,
+    }
+    assert mock_run.call_args.kwargs["default_tool_profile"] == "full"
 
 
 def test_main_tracks_main_and_code_mode_servers_when_mcpcat_project_id_set():
@@ -321,18 +362,20 @@ def test_main_tracks_main_and_code_mode_servers_when_mcpcat_project_id_set():
         host=False,
     )
     main_server = SimpleNamespace()
+    slim_server = SimpleNamespace()
     code_mode_server = SimpleNamespace()
+    slim_code_mode_server = SimpleNamespace()
 
     with patch.dict("os.environ", {"ROOTLY_MCPCAT_PROJECT_ID": "proj_test_123"}, clear=True):
         with patch("rootly_mcp_server.__main__.parse_args", return_value=args):
             with patch("rootly_mcp_server.__main__.setup_logging"):
                 with patch(
                     "rootly_mcp_server.__main__.create_rootly_mcp_server",
-                    return_value=main_server,
+                    side_effect=[main_server, slim_server],
                 ):
                     with patch(
                         "rootly_mcp_server.__main__.create_rootly_codemode_server",
-                        return_value=code_mode_server,
+                        side_effect=[code_mode_server, slim_code_mode_server],
                     ):
                         with patch("rootly_mcp_server.__main__.run_dual_http_server"):
                             with patch(
@@ -340,6 +383,8 @@ def test_main_tracks_main_and_code_mode_servers_when_mcpcat_project_id_set():
                             ) as mock_track:
                                 main()
 
-    assert len(mock_track.call_args_list) == 2
+    assert len(mock_track.call_args_list) == 4
     assert mock_track.call_args_list[0].args[:2] == (main_server, "proj_test_123")
-    assert mock_track.call_args_list[1].args[:2] == (code_mode_server, "proj_test_123")
+    assert mock_track.call_args_list[1].args[:2] == (slim_server, "proj_test_123")
+    assert mock_track.call_args_list[2].args[:2] == (code_mode_server, "proj_test_123")
+    assert mock_track.call_args_list[3].args[:2] == (slim_code_mode_server, "proj_test_123")
