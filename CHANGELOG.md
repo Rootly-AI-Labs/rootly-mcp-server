@@ -5,6 +5,22 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.12] - Released 2026-05-28
+
+### Fixed
+
+- **Unfilled Path Templates**: When a tool was called with a missing or misnamed path argument (e.g. `schedule_id` instead of `id`), FastMCP left the literal `{id}` placeholder in the URL and the encoded `%7Bid%7D` was sent upstream, producing a misleading 404 "Not found or unauthorized". The transport layer now detects unfilled placeholders in the URL path and raises a `RootlyValidationError` naming the missing parameter before any upstream call
+- **Deprecated Alert Routing Endpoint**: Tenants with Advanced Alert Routing enabled were repeatedly hitting 403s on `/v1/alert_routing_rules`. The replacement `listAlertRoutes` / `getAlertRoute` operations are now exposed in the default allowlist, and 403 responses with the Advanced Alert Routing message are annotated with a structured `_use_tool` field pointing models at the correct replacement
+- **Schedule Shift Date Range Cap**: `getScheduleShifts` and `listShifts` callers regularly hit opaque 422 errors after sending `from`/`to` windows larger than the upstream cap (1 month and 2 months respectively). A pre-flight check now parses the dates and rejects oversized windows client-side with a clear chunking recommendation. `/v1/override_shifts/*` paths are excluded
+- **Phantom `listIncidents` Tool**: `canonicalize_tool_names()` only expanded legacy → canonical aliases, so an allowlist mentioning `list_incidents` (the canonical name) stripped the curated `listIncidents` proxy. Alias expansion is now bidirectional, keeping both names exposed together during the deprecation window
+- **Missing `createSchedule` In Hosted Slim Profile**: The `/schedules` POST endpoint was already write-allowed, but the operationId wasn't included in the slim hosted tool profile. Added so models can actually create schedules when write tools are enabled
+- **Param-Name Discoverability**: Production logs showed models repeatedly guessing wrong on parameter names that were unobvious from tool descriptions. Tool descriptions now explicitly name the canonical argument shape for `getIncident` (`incident_id`, not `id`), the `max_results <= 10` cap on `search_incidents`, the `user_ids` (not `emails`) contract on `check_responder_availability`, and the plural `schedule_ids` argument on `get_oncall_schedule_summary`
+
+### Testing
+
+- Added focused transport coverage for unfilled-path-template rejection, shift date-range pre-flight (with override-shift lookalike exclusions), alert-routing 403 annotation, and false-positive guards on query-string braces and similar lookalike paths
+- Extended `canonicalize_tool_names` coverage for both directions of the legacy/canonical pair
+
 ## [2.3.11] - Released 2026-05-27
 
 ### Features
