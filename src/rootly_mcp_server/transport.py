@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -804,6 +805,84 @@ class AuthenticatedHTTPXClient:
             return None
         return api_token
 
+    # Date-range caps enforced by the Rootly shift endpoints. The upstream API
+    # returns 422 with "Datetime range exceeds N month(s)" when a request
+    # exceeds these limits; pre-flighting the check here turns a confusing
+    # upstream error into an actionable client-side validation error.
+    # Keys are matched as substrings against the URL path.
+    _DATE_RANGE_LIMITS: dict[str, int] = {
+        "/v1/shifts": 62,  # listShifts: 2 months
+        "/shifts": 31,  # /v1/schedules/{id}/shifts and getScheduleShifts: 1 month
+    }
+
+    @staticmethod
+    def _parse_iso_date(value: Any) -> datetime | None:
+        if not isinstance(value, str) or not value:
+            return None
+        candidate = value.strip()
+        if not candidate:
+            return None
+        # httpx/upstream accept both date-only (`2026-05-28`) and ISO datetime.
+        normalized = candidate.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            try:
+                parsed = datetime.strptime(candidate, "%Y-%m-%d")
+            except ValueError:
+                return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed
+
+    @classmethod
+    def _check_shift_date_range(
+        cls, method: str, url: Any, params: dict[str, Any] | None
+    ) -> None:
+        """Reject shift queries whose `from`/`to` span exceeds the API's cap."""
+        if method.upper() != "GET":
+            return
+        url_str = str(url)
+        path = cls._path_for_url(url_str)
+        limit_days: int | None = None
+        # Longest-match wins so /v1/shifts (62d) beats /shifts (31d).
+        for endpoint_marker, days in sorted(
+            cls._DATE_RANGE_LIMITS.items(), key=lambda kv: -len(kv[0])
+        ):
+            if endpoint_marker in path:
+                limit_days = days
+                break
+        if limit_days is None:
+            return
+        # Pull `from`/`to` from either explicit kwargs or the URL query string.
+        from_raw: Any = None
+        to_raw: Any = None
+        if params:
+            from_raw = params.get("from")
+            to_raw = params.get("to")
+        if from_raw is None or to_raw is None:
+            try:
+                query_params = httpx.URL(url_str).params
+                if from_raw is None:
+                    from_raw = query_params.get("from")
+                if to_raw is None:
+                    to_raw = query_params.get("to")
+            except Exception:
+                return
+        from_dt = cls._parse_iso_date(from_raw)
+        to_dt = cls._parse_iso_date(to_raw)
+        if from_dt is None or to_dt is None:
+            return  # Let upstream handle malformed dates with its own 422.
+        span_days = (to_dt - from_dt).total_seconds() / 86400
+        if span_days <= limit_days:
+            return
+        raise RootlyValidationError(
+            f"Date range from={from_raw} to={to_raw} spans {span_days:.1f} days, "
+            f"which exceeds the Rootly API's {limit_days}-day cap for {path}. "
+            f"Split the query into smaller chunks (each <= {limit_days} days) and "
+            f"combine the results."
+        )
+
     @staticmethod
     def _check_for_unfilled_path_params(method: str, url: Any) -> None:
         """Block requests whose URL still contains unfilled `{param}` templates.
@@ -882,6 +961,7 @@ class AuthenticatedHTTPXClient:
         # Transform query parameters
         if "params" in kwargs:
             kwargs["params"] = self._transform_params(kwargs["params"])
+        self._check_shift_date_range(method, url, kwargs.get("params"))
         if "json" in kwargs:
             kwargs["json"] = self._normalize_request_json_payload(method, kwargs["json"])
 
@@ -1298,6 +1378,8 @@ class AuthenticatedHTTPXClient:
                 content=request.content,
             )
             request = new_request
+
+        self._check_shift_date_range(request.method, request.url, None)
 
         try:
             response = await self.client.send(request, **kwargs)

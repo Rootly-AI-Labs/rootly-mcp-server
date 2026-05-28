@@ -662,6 +662,57 @@ class TestTransportModule:
             "include": "alert_urgency",
         }
 
+    def test_check_shift_date_range_blocks_over_31_day_schedule_query(self):
+        with pytest.raises(RootlyValidationError) as exc_info:
+            transport.AuthenticatedHTTPXClient._check_shift_date_range(
+                "GET",
+                "https://api.rootly.com/v1/schedules/abc/shifts",
+                {"from": "2026-05-01", "to": "2026-07-31"},
+            )
+        msg = str(exc_info.value)
+        assert "31-day cap" in msg
+        assert "Split the query" in msg
+
+    def test_check_shift_date_range_blocks_over_62_day_listShifts(self):
+        with pytest.raises(RootlyValidationError):
+            transport.AuthenticatedHTTPXClient._check_shift_date_range(
+                "GET",
+                "https://api.rootly.com/v1/shifts?from=2026-04-01T00:00:00Z&to=2026-07-01T00:00:00Z",
+                None,
+            )
+
+    def test_check_shift_date_range_allows_within_limit(self):
+        # 28 days on the schedule endpoint (limit 31) — must pass.
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "GET",
+            "https://api.rootly.com/v1/schedules/abc/shifts",
+            {"from": "2026-05-01", "to": "2026-05-29"},
+        )
+
+    def test_check_shift_date_range_ignores_non_get(self):
+        # A POST on the same path must not be range-checked.
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "POST",
+            "https://api.rootly.com/v1/schedules/abc/shifts",
+            {"from": "2026-01-01", "to": "2026-12-31"},
+        )
+
+    def test_check_shift_date_range_ignores_unrelated_path(self):
+        # Same params on a different endpoint must not be checked.
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "GET",
+            "https://api.rootly.com/v1/incidents",
+            {"from": "2026-01-01", "to": "2026-12-31"},
+        )
+
+    def test_check_shift_date_range_skips_on_malformed_dates(self):
+        # Bad dates should fall through to the upstream's own error path.
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "GET",
+            "https://api.rootly.com/v1/shifts",
+            {"from": "not-a-date", "to": "also-not"},
+        )
+
     def test_alert_routing_rules_403_gets_use_tool_hint(self):
         """403 from /alert_routing_rules with advanced-routing message gets a _use_tool field."""
         response = httpx.Response(
