@@ -705,6 +705,41 @@ class TestTransportModule:
             {"from": "2026-01-01", "to": "2026-12-31"},
         )
 
+    def test_check_shift_date_range_ignores_override_shifts_lookalike(self):
+        # `/v1/schedules/{id}/override_shifts` and `/v1/override_shifts/{id}` both
+        # contain the substring `_shifts` but do not END in `/shifts`. They must
+        # not be range-checked — they have their own (different) date semantics.
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "GET",
+            "https://api.rootly.com/v1/schedules/abc/override_shifts",
+            {"from": "2026-01-01", "to": "2026-12-31"},
+        )
+        transport.AuthenticatedHTTPXClient._check_shift_date_range(
+            "GET",
+            "https://api.rootly.com/v1/override_shifts/abc",
+            {"from": "2026-01-01", "to": "2026-12-31"},
+        )
+
+    def test_check_for_unfilled_path_params_ignores_query_string_braces(self):
+        # A legitimate query value containing `{...}` (or URL-encoded `%7B...%7D`)
+        # must not trigger the path-template guard. Only braces in the URL path
+        # indicate an unfilled OpenAPI substitution.
+        transport.AuthenticatedHTTPXClient._check_for_unfilled_path_params(
+            "GET", "https://api.rootly.com/v1/incidents?filter[search]={literal}"
+        )
+        transport.AuthenticatedHTTPXClient._check_for_unfilled_path_params(
+            "GET",
+            "https://api.rootly.com/v1/incidents?filter%5Bsearch%5D=%7Bliteral%7D",
+        )
+
+    def test_check_for_unfilled_path_params_catches_path_brace_with_query(self):
+        # An unfilled placeholder in the PATH must still raise even when the
+        # URL also has a query string.
+        with pytest.raises(RootlyValidationError):
+            transport.AuthenticatedHTTPXClient._check_for_unfilled_path_params(
+                "GET", "https://api.rootly.com/v1/schedules/{id}/shifts?from=2026-01-01"
+            )
+
     def test_check_shift_date_range_skips_on_malformed_dates(self):
         # Bad dates should fall through to the upstream's own error path.
         transport.AuthenticatedHTTPXClient._check_shift_date_range(

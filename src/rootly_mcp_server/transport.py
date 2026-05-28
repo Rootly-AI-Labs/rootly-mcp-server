@@ -809,11 +809,11 @@ class AuthenticatedHTTPXClient:
     # returns 422 with "Datetime range exceeds N month(s)" when a request
     # exceeds these limits; pre-flighting the check here turns a confusing
     # upstream error into an actionable client-side validation error.
-    # Keys are matched as substrings against the URL path.
-    _DATE_RANGE_LIMITS: dict[str, int] = {
-        "/v1/shifts": 62,  # listShifts: 2 months
-        "/shifts": 31,  # /v1/schedules/{id}/shifts and getScheduleShifts: 1 month
-    }
+    #
+    # `/v1/shifts`         → listShifts: 2 months cap
+    # `/v1/schedules/{id}/shifts` → getScheduleShifts: 1 month cap
+    _LIST_SHIFTS_LIMIT_DAYS = 62
+    _SCHEDULE_SHIFTS_LIMIT_DAYS = 31
 
     @staticmethod
     def _parse_iso_date(value: Any) -> datetime | None:
@@ -843,17 +843,17 @@ class AuthenticatedHTTPXClient:
         if method.upper() != "GET":
             return
         url_str = str(url)
-        path = cls._path_for_url(url_str)
-        limit_days: int | None = None
-        # Longest-match wins so /v1/shifts (62d) beats /shifts (31d).
-        for endpoint_marker, days in sorted(
-            cls._DATE_RANGE_LIMITS.items(), key=lambda kv: -len(kv[0])
-        ):
-            if endpoint_marker in path:
-                limit_days = days
-                break
-        if limit_days is None:
+        path = cls._path_for_url(url_str).rstrip("/")
+        # The path must END in `/shifts` to be a real shift-list endpoint, which
+        # excludes lookalikes like `/v1/override_shifts/{id}` or
+        # `/v1/schedules/{id}/override_shifts` (no `/shifts` suffix).
+        if not path.endswith("/shifts"):
             return
+        if path == "/v1/shifts":
+            limit_days = cls._LIST_SHIFTS_LIMIT_DAYS
+        else:
+            # Anything else ending in `/shifts` is the per-schedule endpoint.
+            limit_days = cls._SCHEDULE_SHIFTS_LIMIT_DAYS
         # Pull `from`/`to` from either explicit kwargs or the URL query string.
         from_raw: Any = None
         to_raw: Any = None
@@ -885,16 +885,22 @@ class AuthenticatedHTTPXClient:
 
     @staticmethod
     def _check_for_unfilled_path_params(method: str, url: Any) -> None:
-        """Block requests whose URL still contains unfilled `{param}` templates.
+        """Block requests whose URL PATH still contains unfilled `{param}` templates.
 
         FastMCP's OpenAPI integration substitutes path parameters from tool
         arguments. When the model calls a tool with the wrong parameter name
         (e.g. `schedule_id` instead of `id`), the placeholder remains in the URL
         and gets sent upstream, producing a misleading 404. This guard catches
         that earlier with a clear, actionable error.
+
+        The check is restricted to the URL path (not the query string or
+        fragment) so that legitimate query values containing literal braces or
+        URL-encoded braces don't trigger a false positive.
         """
         url_str = str(url)
-        matches = _UNFILLED_PATH_PARAM_RE.findall(url_str)
+        # Extract the path portion only; everything from `?` onward is query.
+        path = AuthenticatedHTTPXClient._path_for_url(url_str)
+        matches = _UNFILLED_PATH_PARAM_RE.findall(path)
         if not matches:
             return
         # Normalize URL-encoded matches (`%7Bid%7D`) back to `{id}` for the message.
@@ -1131,7 +1137,12 @@ class AuthenticatedHTTPXClient:
         if response.status_code != 403:
             return response
         path = AuthenticatedHTTPXClient._path_for_url(url)
-        if not path.startswith("/v1/alert_routing_rules"):
+        # Match `/v1/alert_routing_rules` and `/v1/alert_routing_rules/{id}` only;
+        # a hypothetical `/v1/alert_routing_rules_v2` would slip through a plain
+        # startswith. Anchor on a `/` boundary instead.
+        if path != "/v1/alert_routing_rules" and not path.startswith(
+            "/v1/alert_routing_rules/"
+        ):
             return response
         try:
             body = response.json()
