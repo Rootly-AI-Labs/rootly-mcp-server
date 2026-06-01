@@ -512,6 +512,9 @@ SECURITY_EXCLUDED_PATHS = [
 # read-only workflows and avoids exposing broader admin/config writes.
 DEFAULT_WRITE_ALLOWED_PATHS = [
     # Core incident and infrastructure - create + update
+    "/alerts",
+    "/alerts/{id}",
+    "/incidents/{incident_id}/alerts",
     "/environments",
     "/environments/{environment_id}",
     "/functionalities",
@@ -524,9 +527,23 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/severities/{severity_id}",
     "/teams",
     "/teams/{team_id}",
+    # Alert management - create + update
+    "/alerts/{alert_id}/events",
+    "/alert_groups",
+    "/alert_groups/{id}",
+    "/alert_routes",
+    "/alert_routes/{id}",
+    "/alert_routing_rules",
+    "/alert_routing_rules/{id}",
+    "/alert_urgencies",
+    "/alert_urgencies/{id}",
+    "/alert_sources",
+    "/alert_sources/{id}",
     # Incident mutations
     "/alert_events/{id}",
+    "/action_items/{id}",
     "/incidents/{incident_id}/action_items",
+    "/incidents/{incident_id}/custom_field_selections",
     "/incidents/{incident_id}/events",
     "/incidents/{incident_id}/form_field_selections",
     "/incident_form_field_selections/{id}",
@@ -535,6 +552,8 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/schedules/{schedule_id}",
     "/schedules/{schedule_id}/schedule_rotations",
     "/schedule_rotations/{schedule_rotation_id}",
+    "/schedule_rotations/{schedule_rotation_id}/schedule_rotation_users",
+    "/schedule_rotations/{schedule_rotation_id}/schedule_rotation_active_days",
     "/schedules/{schedule_id}/override_shifts",
     "/override_shifts/{override_shift_id}",
     "/schedules/{schedule_id}/on_call_shadows",
@@ -551,6 +570,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     # Workflows - create + update
     "/workflows",
     "/workflows/{workflow_id}",
+    "/workflows/{workflow_id}/workflow_runs",
     "/workflow_groups",
     "/workflow_groups/{id}",
     "/workflows/{workflow_id}/workflow_tasks",
@@ -561,6 +581,13 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/dashboards/{id}",
     "/dashboards/{dashboard_id}/panels",
     "/dashboard_panels/{id}",
+    # Forms - create + update
+    "/custom_forms",
+    "/custom_forms/{id}",
+    "/form_fields",
+    "/form_fields/{id}",
+    "/form_fields/{form_field_id}/options",
+    "/form_field_options/{id}",
     # Playbooks - create + update
     "/playbooks",
     "/playbooks/{id}",
@@ -584,6 +611,9 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/retrospective_steps/{id}",
     "/postmortem_templates",
     "/postmortem_templates/{id}",
+    # Status page templates
+    "/status-pages/{status_page_id}/templates",
+    "/templates/{id}",
     # Communications - create + update
     "/communications_groups",
     "/communications_groups/{id}",

@@ -374,22 +374,21 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "listCauses" in tool_names
         assert "getCause" in tool_names
 
-        # Workflow creates now enabled, but workflow runs remain excluded
-        assert "createWorkflowRun" not in tool_names
-        # Alert configuration writes remain excluded (connects to external systems)
-        assert "createAlertGroup" not in tool_names
-        assert "updateAlertGroup" not in tool_names
-        assert "createAlertRoutingRule" not in tool_names
-        assert "updateAlertRoutingRule" not in tool_names
-        assert "createAlertSource" not in tool_names
-        assert "updateAlertSource" not in tool_names
-        assert "createAlertUrgency" not in tool_names
-        assert "updateAlertUrgency" not in tool_names
-        # Custom form/field creation excluded (schema-level configuration)
-        assert "createCustomForm" not in tool_names
-        assert "updateCustomForm" not in tool_names
-        assert "createFormField" not in tool_names
-        assert "updateFormField" not in tool_names
+        # The full write-enabled surface should include non-destructive alert,
+        # form, and workflow writes, while destructive deletes remain excluded.
+        assert "createWorkflowRun" in tool_names
+        assert "createAlertEvent" in tool_names
+        assert "createAlertGroup" in tool_names
+        assert "updateAlertGroup" in tool_names
+        assert "createAlertRoutingRule" in tool_names
+        assert "updateAlertRoutingRule" in tool_names
+        assert "createAlertUrgency" in tool_names
+        assert "updateAlertUrgency" in tool_names
+        assert "createCustomForm" in tool_names
+        assert "updateCustomForm" in tool_names
+        assert "createFormField" in tool_names
+        assert "updateFormField" in tool_names
+        assert "deleteAlertEvent" not in tool_names
 
     async def test_enable_write_tools_exposes_curated_generated_write_tools(
         self, mock_environment_token
@@ -419,7 +418,10 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "updateWorkflow" in tool_names
         assert "createWorkflowTask" in tool_names
         assert "updateWorkflowTask" in tool_names
-        assert "updateAlert" not in tool_names
+        assert "createAlertEvent" in tool_names
+        assert "createAlertGroup" in tool_names
+        assert "updateAlert" in tool_names
+        assert "updateAlertGroup" in tool_names
         assert "updateUser" not in tool_names
         assert "deleteSchedule" not in tool_names
         assert "deleteScheduleRotation" not in tool_names
@@ -436,6 +438,9 @@ class TestBundledIncidentFormFieldSelectionTools:
 
         assert len(tool_names) > len(DEFAULT_HOSTED_ENABLED_TOOLS)
         assert "createIncidentActionItem" in tool_names
+        assert "createAlertEvent" in tool_names
+        assert "createAlertGroup" in tool_names
+        assert "updateAlert" in tool_names
         assert "updateIncident" in tool_names
         assert "search_incidents" in tool_names
         assert "createWorkflowTask" in tool_names
