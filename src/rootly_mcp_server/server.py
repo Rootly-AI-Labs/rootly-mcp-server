@@ -435,7 +435,7 @@ class ArgumentNormalizationMiddleware(fastmcp_middleware.Middleware):
             if csv_args:
                 for key in csv_args:
                     val = args.get(key)
-                    if isinstance(val, list):
+                    if isinstance(val, list) and val:
                         args[key] = ",".join(str(v) for v in val)
 
         return await call_next(context)

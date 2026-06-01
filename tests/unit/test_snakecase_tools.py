@@ -159,6 +159,13 @@ class TestArgumentNormalizationMiddleware:
         )
         assert args["schedule_ids"] == "abc,def"
 
+    async def test_empty_list_left_unchanged(self):
+        _, args = await self._run(
+            "list_shifts",
+            {"from_date": "2026-01-01", "to_date": "2026-01-07", "schedule_ids": []},
+        )
+        assert args["schedule_ids"] == []
+
     async def test_no_op_for_unrelated_tools(self):
         _, args = await self._run("get_incident", {"incident_id": "123"})
         assert args == {"incident_id": "123"}
