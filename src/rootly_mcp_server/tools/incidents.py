@@ -625,9 +625,8 @@ def register_incident_tools(
             Field(
                 description=(
                     "Maximum total results when fetching all pages "
-                    "(ignored if page_number > 0). CAPPED AT 10 — passing a larger "
-                    "value raises a validation error. For larger result sets, use "
-                    "page_number > 0 and paginate explicitly."
+                    "(ignored if page_number > 0). Max: 10. For larger result sets, use "
+                    "page_number > 0 and paginate explicitly, or use collect_incidents."
                 ),
                 ge=1,
                 le=10,
