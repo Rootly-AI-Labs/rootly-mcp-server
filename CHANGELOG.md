@@ -5,6 +5,28 @@ All notable changes to the Rootly MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.13] - Released 2026-06-01
+
+### Features
+
+- **OAuth Authorization Server Metadata**: Hosted MCP deployments now serve RFC 8414 authorization server metadata so OAuth-capable clients can discover Rootly's authorization endpoints directly from the MCP server
+- **Remote Safe Write Surface Expanded**: The hosted/full tool surface now exposes a broader set of non-destructive write tools for alerts, alert events, alert routes, alert sources, custom forms, form fields, workflow runs, status page templates, and related resources
+
+### Fixed
+
+- **Snake Case Tool Names**: OpenAPI-generated MCP tools are now normalized to `snake_case`, with a compatibility bridge for legacy camelCase callers, so tool discovery and invocation are more predictable across MCP clients
+- **ASGI Response Double-Send Guard**: Hosted auth middleware now suppresses orphaned or duplicate body frames after a response is already dropped or completed, preventing duplicate ASGI response behavior in production
+- **OAuth Scope Compatibility**: Protected resource metadata now advertises a single coarse `all` scope instead of many granular scopes, improving compatibility with MCP clients that fail to forward fine-grained scopes through dynamic client registration
+
+### Infrastructure
+
+- **Docker Base Updated**: The container image now builds on `python:3.13-slim`
+
+### Testing
+
+- Added focused coverage for snake_case normalization and the camelCase alias bridge
+- Added/updated hosted and server allowlist coverage for the expanded write surface
+
 ## [2.3.12] - Released 2026-05-28
 
 ### Fixed
