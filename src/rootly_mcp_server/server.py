@@ -397,6 +397,50 @@ class CamelCaseAliasMiddleware(fastmcp_middleware.Middleware):
         return await call_next(context)
 
 
+_ARGUMENT_RENAMES: dict[str, dict[str, str]] = {
+    "list_shifts": {"from": "from_date", "to": "to_date"},
+    "search_incidents": {"max_tokens": "max_results"},
+}
+
+_LIST_TO_CSV_ARGS: dict[str, set[str]] = {
+    "list_shifts": {"schedule_ids", "user_ids"},
+    "get_oncall_shift_metrics": {"schedule_ids", "user_ids", "team_ids"},
+    "get_oncall_schedule_summary": {"schedule_ids", "team_ids"},
+}
+
+
+class ArgumentNormalizationMiddleware(fastmcp_middleware.Middleware):
+    """Rewrites common mis-named or mis-typed arguments before pydantic validation.
+
+    LLM clients frequently send ``from``/``to`` instead of ``from_date``/``to_date``
+    for shift tools, or pass a list where a comma-separated string is expected.
+    Fixing upstream is impossible (every client is different), so we normalize here.
+    """
+
+    async def on_call_tool(
+        self,
+        context: fastmcp_middleware.MiddlewareContext[mt.CallToolRequestParams],
+        call_next: fastmcp_middleware.CallNext[mt.CallToolRequestParams, Any],
+    ) -> Any:
+        args = context.message.arguments
+        tool = context.message.name
+        if args:
+            renames = _ARGUMENT_RENAMES.get(tool)
+            if renames:
+                for old_key, new_key in renames.items():
+                    if old_key in args and new_key not in args:
+                        args[new_key] = args.pop(old_key)
+
+            csv_args = _LIST_TO_CSV_ARGS.get(tool)
+            if csv_args:
+                for key in csv_args:
+                    val = args.get(key)
+                    if isinstance(val, list):
+                        args[key] = ",".join(str(v) for v in val)
+
+        return await call_next(context)
+
+
 class ToolUsageLoggingMiddleware(fastmcp_middleware.Middleware):
     """FastMCP middleware that logs per-tool usage with caller identity context."""
 
@@ -606,6 +650,7 @@ def create_rootly_mcp_server(
     # Alias middleware runs first so the historical camelCase names are rewritten
     # to snake_case before usage logging records the (canonical) tool name.
     mcp.add_middleware(CamelCaseAliasMiddleware(camel_to_snake_aliases))
+    mcp.add_middleware(ArgumentNormalizationMiddleware())
     mcp.add_middleware(ToolUsageLoggingMiddleware())
 
     @mcp.custom_route("/healthz", methods=["GET"])

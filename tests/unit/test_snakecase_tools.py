@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from rootly_mcp_server.server import CamelCaseAliasMiddleware
+from rootly_mcp_server.server import ArgumentNormalizationMiddleware, CamelCaseAliasMiddleware
 from rootly_mcp_server.spec_transform import snakecase_operation_ids, to_snake_case
 
 
@@ -76,34 +76,89 @@ class TestSnakecaseOperationIds:
         assert mapping == {"getThing": "get_thing"}
 
 
+async def _run_middleware(middleware, name, arguments=None):
+    """Drive a single on_call_tool invocation and return (result, captured context)."""
+    if arguments is None:
+        arguments = {}
+    captured = {}
+
+    async def call_next(context):
+        captured["name"] = context.message.name
+        captured["args"] = dict(context.message.arguments) if context.message.arguments else {}
+        return "ok"
+
+    context = SimpleNamespace(message=SimpleNamespace(name=name, arguments=arguments))
+    result = await middleware.on_call_tool(context, call_next)
+    return result, captured
+
+
 @pytest.mark.asyncio
 class TestCamelCaseAliasMiddleware:
-    async def _run(self, middleware, name):
-        captured = {}
-
-        async def call_next(context):
-            captured["name"] = context.message.name
-            return "ok"
-
-        context = SimpleNamespace(message=SimpleNamespace(name=name, arguments={}))
-        result = await middleware.on_call_tool(context, call_next)
-        return result, captured["name"]
-
     async def test_rewrites_camelcase_to_canonical_snake_case(self):
         mw = CamelCaseAliasMiddleware({"getScheduleShifts": "get_schedule_shifts"})
-        result, dispatched = await self._run(mw, "getScheduleShifts")
+        result, ctx = await _run_middleware(mw, "getScheduleShifts")
         assert result == "ok"
-        assert dispatched == "get_schedule_shifts"
+        assert ctx["name"] == "get_schedule_shifts"
 
     async def test_passes_through_unknown_and_snake_names_untouched(self):
         mw = CamelCaseAliasMiddleware({"getScheduleShifts": "get_schedule_shifts"})
-        _, dispatched = await self._run(mw, "get_schedule_shifts")
-        assert dispatched == "get_schedule_shifts"
-        _, dispatched = await self._run(mw, "some_other_tool")
-        assert dispatched == "some_other_tool"
+        _, ctx = await _run_middleware(mw, "get_schedule_shifts")
+        assert ctx["name"] == "get_schedule_shifts"
+        _, ctx = await _run_middleware(mw, "some_other_tool")
+        assert ctx["name"] == "some_other_tool"
 
     async def test_identity_mapping_is_a_harmless_no_op(self):
-        # An identity entry rewrites the name to itself — behaviorally a no-op.
         mw = CamelCaseAliasMiddleware({"tool_search": "tool_search"})
-        _, dispatched = await self._run(mw, "tool_search")
-        assert dispatched == "tool_search"
+        _, ctx = await _run_middleware(mw, "tool_search")
+        assert ctx["name"] == "tool_search"
+
+
+@pytest.mark.asyncio
+class TestArgumentNormalizationMiddleware:
+    async def _run(self, name, arguments):
+        _, ctx = await _run_middleware(ArgumentNormalizationMiddleware(), name, arguments)
+        return "ok", ctx["args"]
+
+    async def test_renames_from_to_from_date_for_list_shifts(self):
+        _, args = await self._run(
+            "list_shifts",
+            {"from": "2026-01-01", "to": "2026-01-07", "page_size": 25},
+        )
+        assert args["from_date"] == "2026-01-01"
+        assert args["to_date"] == "2026-01-07"
+        assert "from" not in args
+        assert "to" not in args
+
+    async def test_no_rename_when_canonical_already_present(self):
+        _, args = await self._run(
+            "list_shifts",
+            {"from": "old", "from_date": "correct", "to_date": "also_correct"},
+        )
+        assert args["from_date"] == "correct"
+        assert args["from"] == "old"
+
+    async def test_renames_max_tokens_to_max_results_for_search_incidents(self):
+        _, args = await self._run(
+            "search_incidents",
+            {"query": "outage", "max_tokens": "3000"},
+        )
+        assert args["max_results"] == "3000"
+        assert "max_tokens" not in args
+
+    async def test_converts_list_schedule_ids_to_csv(self):
+        _, args = await self._run(
+            "list_shifts",
+            {"from_date": "2026-01-01", "to_date": "2026-01-07", "schedule_ids": ["abc", "def"]},
+        )
+        assert args["schedule_ids"] == "abc,def"
+
+    async def test_leaves_string_schedule_ids_alone(self):
+        _, args = await self._run(
+            "list_shifts",
+            {"from_date": "2026-01-01", "to_date": "2026-01-07", "schedule_ids": "abc,def"},
+        )
+        assert args["schedule_ids"] == "abc,def"
+
+    async def test_no_op_for_unrelated_tools(self):
+        _, args = await self._run("get_incident", {"incident_id": "123"})
+        assert args == {"incident_id": "123"}

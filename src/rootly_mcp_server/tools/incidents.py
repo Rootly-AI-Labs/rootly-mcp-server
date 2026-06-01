@@ -625,12 +625,11 @@ def register_incident_tools(
             Field(
                 description=(
                     "Maximum total results when fetching all pages "
-                    "(ignored if page_number > 0). CAPPED AT 10 — passing a larger "
-                    "value raises a validation error. For larger result sets, use "
+                    "(ignored if page_number > 0). Max: 50. For larger result sets, use "
                     "page_number > 0 and paginate explicitly."
                 ),
                 ge=1,
-                le=10,
+                le=50,
             ),
         ] = 5,
     ) -> JsonDict:
@@ -640,7 +639,7 @@ def register_incident_tools(
         Use page_number=0 to fetch all matching results across multiple pages up to max_results.
         Use page_number>0 to fetch a specific page.
 
-        Argument caps: page_size <= 20, max_results <= 10.
+        Argument caps: page_size <= 20, max_results <= 50.
         """
         # Single page mode
         if page_number > 0:
