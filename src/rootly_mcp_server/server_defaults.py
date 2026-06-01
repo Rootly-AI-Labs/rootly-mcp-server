@@ -564,6 +564,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/escalation_policies",
     "/escalation_policies/{escalation_policy_id}",
     "/escalation_policies/{escalation_policy_id}/escalation_paths",
+    "/escalation_policies/{escalation_policy_id}/escalation_levels",
     "/escalation_paths/{escalation_policy_path_id}",
     "/escalation_paths/{escalation_policy_path_id}/escalation_levels",
     "/escalation_levels/{escalation_level_id}",
@@ -576,6 +577,7 @@ DEFAULT_WRITE_ALLOWED_PATHS = [
     "/workflows/{workflow_id}/workflow_tasks",
     "/workflow_tasks/{id}",
     "/workflows/{workflow_id}/form_field_conditions",
+    "/workflow_form_field_conditions/{id}",
     # Dashboards - create + update
     "/dashboards",
     "/dashboards/{id}",
