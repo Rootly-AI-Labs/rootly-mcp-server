@@ -356,7 +356,9 @@ class TestBundledIncidentFormFieldSelectionTools:
         # Delete operations are still restricted
         assert "delete_workflow_task" not in tool_names
 
-    async def test_default_server_shows_additional_read_tools(self, mock_environment_token):
+    async def test_default_server_shows_additional_read_and_write_tools(
+        self, mock_environment_token
+    ):
         server = create_rootly_mcp_server(hosted=False)
 
         tools = await server.list_tools()
@@ -404,22 +406,28 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "list_causes" in tool_names
         assert "get_cause" in tool_names
 
-        # Workflow creates now enabled, but workflow runs remain excluded
-        assert "create_workflow_run" not in tool_names
-        # Alert configuration writes remain excluded (connects to external systems)
-        assert "create_alert_group" not in tool_names
-        assert "update_alert_group" not in tool_names
-        assert "create_alert_routing_rule" not in tool_names
-        assert "update_alert_routing_rule" not in tool_names
-        assert "create_alert_source" not in tool_names
-        assert "update_alert_source" not in tool_names
-        assert "create_alert_urgency" not in tool_names
-        assert "update_alert_urgency" not in tool_names
-        # Custom form/field creation excluded (schema-level configuration)
-        assert "create_custom_form" not in tool_names
-        assert "update_custom_form" not in tool_names
-        assert "create_form_field" not in tool_names
-        assert "update_form_field" not in tool_names
+        # The full write-enabled surface should include non-destructive alert,
+        # form, and workflow writes, while destructive deletes remain excluded.
+        assert "create_workflow_run" in tool_names
+        assert "create_alert_event" in tool_names
+        assert "create_alert_group" in tool_names
+        assert "update_alert_group" in tool_names
+        assert "create_alert_route" in tool_names
+        assert "update_alert_route" in tool_names
+        assert "patch_alert_route" in tool_names
+        assert "create_alert_routing_rule" in tool_names
+        assert "update_alert_routing_rule" in tool_names
+        assert "create_alerts_source" in tool_names
+        assert "update_alerts_source" in tool_names
+        assert "create_alert_urgency" in tool_names
+        assert "update_alert_urgency" in tool_names
+        assert "create_custom_form" in tool_names
+        assert "update_custom_form" in tool_names
+        assert "create_escalation_level" in tool_names
+        assert "create_form_field" in tool_names
+        assert "update_form_field" in tool_names
+        assert "update_workflow_form_field_condition" in tool_names
+        assert "delete_alert_event" not in tool_names
 
     async def test_enable_write_tools_exposes_curated_generated_write_tools(
         self, mock_environment_token
@@ -449,7 +457,13 @@ class TestBundledIncidentFormFieldSelectionTools:
         assert "update_workflow" in tool_names
         assert "create_workflow_task" in tool_names
         assert "update_workflow_task" in tool_names
-        assert "update_alert" not in tool_names
+        assert "create_alert_event" in tool_names
+        assert "create_alert_group" in tool_names
+        assert "create_alert_route" in tool_names
+        assert "create_alerts_source" in tool_names
+        assert "update_alert" in tool_names
+        assert "update_alert_group" in tool_names
+        assert "update_workflow_form_field_condition" in tool_names
         assert "update_user" not in tool_names
         assert "delete_schedule" not in tool_names
         assert "delete_schedule_rotation" not in tool_names
@@ -466,6 +480,11 @@ class TestBundledIncidentFormFieldSelectionTools:
 
         assert len(tool_names) > len(DEFAULT_HOSTED_ENABLED_TOOLS)
         assert "create_incident_action_item" in tool_names
+        assert "create_alert_event" in tool_names
+        assert "create_alert_group" in tool_names
+        assert "create_alert_route" in tool_names
+        assert "create_alerts_source" in tool_names
+        assert "update_alert" in tool_names
         assert "update_incident" in tool_names
         assert "search_incidents" in tool_names
         assert "create_workflow_task" in tool_names
