@@ -1560,3 +1560,67 @@ class TestAnnotatorsReachBothTransportPaths:
             )
             out = stripper("GET", "https://api.rootly.com/v1/alerts", response)
             assert out.json() == json.loads(body), f"{stripper.__name__} altered an error body"
+
+
+@pytest.mark.unit
+class TestPlanGatingHintReachesAutogenTools:
+    """The 404 plan-gating hint existed but never reached the tools it was for.
+
+    Responses travel two paths. Curated tools call request(); auto-generated
+    tools reach the API through send(), because FastMCP's OpenAPI executor
+    calls client.send(). The hint was wired only into request(), so the 231
+    auto-generated tools that actually hit plan gating never received it.
+
+    The existing annotator tests could not catch this: they call the static
+    methods directly and never assert a pipeline applies them.
+    """
+
+    def _client(self):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            return transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+
+    def _plan_gated_404(self) -> httpx.Response:
+        return httpx.Response(
+            status_code=404,
+            content=json.dumps({"errors": [{"title": "Not found or unauthorized"}]}).encode(),
+            request=httpx.Request("GET", "https://api.rootly.com/v1/pulses"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_path_annotates_plan_gated_404(self):
+        client = self._client()
+        client.client.send = AsyncMock(return_value=self._plan_gated_404())
+
+        returned = await client.send(httpx.Request("GET", "https://api.rootly.com/v1/pulses"))
+
+        assert "_plan_gating_hint" in returned.json()
+
+    @pytest.mark.asyncio
+    async def test_request_path_still_annotates_plan_gated_404(self):
+        client = self._client()
+        client.client.request = AsyncMock(return_value=self._plan_gated_404())
+
+        returned = await client.request("GET", "/v1/pulses")
+
+        assert "_plan_gating_hint" in returned.json()
+
+    def test_both_paths_apply_the_same_annotators(self):
+        # A guard against the next annotator being added to one path only,
+        # which is the mistake this PR corrects.
+        import inspect
+        import re
+
+        def applied_in(fn) -> set[str]:
+            return set(re.findall(r"self\.(_maybe_annotate_[a-z0-9_]+)\(", inspect.getsource(fn)))
+
+        in_request = applied_in(transport.AuthenticatedHTTPXClient.request)
+        in_send = applied_in(transport.AuthenticatedHTTPXClient.send)
+
+        assert in_request, "expected request() to apply annotators"
+        assert in_request == in_send, (
+            f"annotators differ between transport paths; "
+            f"only in request(): {sorted(in_request - in_send)}; "
+            f"only in send(): {sorted(in_send - in_request)}"
+        )

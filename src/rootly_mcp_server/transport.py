@@ -1496,7 +1496,10 @@ class AuthenticatedHTTPXClient:
             request.method, str(request.url), response
         )
         # Auto-generated tools reach the API through send(), not request(), so
-        # an annotator only applied on request() never reaches them.
+        # an annotator applied only on request() never reaches them. The plan
+        # gating hint matters most here: Rootly answers 404 for endpoints locked
+        # to a subscription tier, which is what these tools hit.
+        response = self._maybe_annotate_404_response(request.method, str(request.url), response)
         response = self._maybe_annotate_alert_routing_deprecation(
             request.method, str(request.url), response
         )
