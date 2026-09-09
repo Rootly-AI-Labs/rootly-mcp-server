@@ -1560,3 +1560,161 @@ class TestAnnotatorsReachBothTransportPaths:
             )
             out = stripper("GET", "https://api.rootly.com/v1/alerts", response)
             assert out.json() == json.loads(body), f"{stripper.__name__} altered an error body"
+
+
+@pytest.mark.unit
+class TestPlanGatingHintReachesAutogenTools:
+    """The 404 plan-gating hint existed but never reached the tools it was for.
+
+    Responses travel two paths. Curated tools call request(); auto-generated
+    tools reach the API through send(), because FastMCP's OpenAPI executor
+    calls client.send(). The hint was wired only into request(), so the 231
+    auto-generated tools that actually hit plan gating never received it.
+
+    The existing annotator tests could not catch this: they call the static
+    methods directly and never assert a pipeline applies them.
+    """
+
+    def _client(self):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            return transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+
+    def _plan_gated_404(self) -> httpx.Response:
+        return httpx.Response(
+            status_code=404,
+            content=json.dumps({"errors": [{"title": "Not found or unauthorized"}]}).encode(),
+            request=httpx.Request("GET", "https://api.rootly.com/v1/pulses"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_send_path_annotates_plan_gated_404(self):
+        client = self._client()
+        client.client.send = AsyncMock(return_value=self._plan_gated_404())
+
+        returned = await client.send(httpx.Request("GET", "https://api.rootly.com/v1/pulses"))
+
+        assert "_plan_gating_hint" in returned.json()
+
+    @pytest.mark.asyncio
+    async def test_request_path_still_annotates_plan_gated_404(self):
+        client = self._client()
+        client.client.request = AsyncMock(return_value=self._plan_gated_404())
+
+        returned = await client.request("GET", "/v1/pulses")
+
+        assert "_plan_gating_hint" in returned.json()
+
+    def test_both_paths_apply_the_same_annotators(self):
+        # A guard against the next annotator being added to one path only,
+        # which is the mistake this PR corrects.
+        import inspect
+        import re
+
+        def applied_in(fn) -> set[str]:
+            return set(re.findall(r"self\.(_maybe_annotate_[a-z0-9_]+)\(", inspect.getsource(fn)))
+
+        in_request = applied_in(transport.AuthenticatedHTTPXClient.request)
+        in_send = applied_in(transport.AuthenticatedHTTPXClient.send)
+
+        assert in_request, "expected request() to apply annotators"
+        assert in_request == in_send, (
+            f"annotators differ between transport paths; "
+            f"only in request(): {sorted(in_request - in_send)}; "
+            f"only in send(): {sorted(in_send - in_request)}"
+        )
+
+
+@pytest.mark.unit
+class TestPlanGatingHintDoesNotMisdiagnoseNestedCollections:
+    """A nested collection's 404 usually means the parent id is wrong.
+
+    `_path_has_id_segment` only inspects the trailing segment, so
+    `/v1/incidents/{id}/action_items` ends in `action_items` and reads as a
+    top-level collection. Claiming plan gating there is wrong: incident events
+    and action items are not gated, the incident simply does not exist.
+
+    Over 30 days of production 404s this shape was 760 of 1,631 -- more than
+    twice the 317 genuine top-level collection 404s -- so getting it wrong
+    would misdiagnose the majority of them.
+    """
+
+    CONFIDENT = "most likely means the feature is not enabled"
+
+    def _hint(self, path: str, method: str = "GET") -> str | None:
+        url = "https://api.rootly.com" + path
+        response = httpx.Response(
+            404,
+            content=json.dumps({"errors": [{"title": "Not found or unauthorized"}]}).encode(),
+            request=httpx.Request(method, url),
+        )
+        annotated = transport.AuthenticatedHTTPXClient._maybe_annotate_404_response(
+            method, url, response
+        )
+        return annotated.json().get("_plan_gating_hint")
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/v1/incidents/4846/action_items",  # numeric parent
+            "/v1/incidents/INC-1742/events",  # prefixed parent
+            "/v1/incidents/a95520fa-f45d-401b-a6d2-9098af345ca1/alerts",  # uuid parent
+            "/v1/catalogs/9f8e/entities",
+        ],
+    )
+    def test_nested_collection_is_not_blamed_on_the_plan(self, path):
+        # All four parent-id shapes appear in production; the check keys on
+        # depth so it does not have to recognise each one.
+        hint = self._hint(path)
+        assert hint is not None, "a nested collection should still be annotated"
+        assert self.CONFIDENT not in hint
+        assert "may mean the resource does not exist" in hint
+
+    @pytest.mark.parametrize("path", ["/v1/schedules", "/v1/alert_routes", "/v1/alert_sources"])
+    def test_top_level_collection_still_gets_the_confident_hint(self, path):
+        # These are the genuine plan-gating 404s and must not be softened.
+        hint = self._hint(path)
+        assert hint is not None
+        assert self.CONFIDENT in hint
+
+    @pytest.mark.parametrize(
+        "path", ["/v1/users/124306", "/v1/causes/a95520fa-f45d-401b-a6d2-9098af345ca1"]
+    )
+    def test_single_resource_get_is_still_left_alone(self, path):
+        assert self._hint(path) is None
+
+    def test_write_to_a_single_resource_is_still_softened(self):
+        hint = self._hint("/v1/incidents/4846", method="PATCH")
+        assert hint is not None
+        assert self.CONFIDENT not in hint
+
+
+@pytest.mark.unit
+class TestNestedCollectionDetection:
+    """Depth, not id shape, is what distinguishes the two collection kinds."""
+
+    @pytest.mark.parametrize(
+        ("path", "nested"),
+        [
+            ("/v1/schedules", False),
+            ("/v1/alert_routes", False),
+            ("/v1/incidents/4846", False),
+            ("/v1/incidents/4846/action_items", True),
+            ("/v1/incidents/INC-1742/events", True),
+            ("/v1/schedules/abc/shifts", True),
+            # trailing slashes and the version prefix must not shift the count
+            ("/v1/schedules/", False),
+            ("/v1/incidents/4846/action_items/", True),
+        ],
+    )
+    def test_depth_classification(self, path, nested):
+        url = "https://api.rootly.com" + path
+        assert transport.AuthenticatedHTTPXClient._path_is_nested_collection(url) is nested
+
+    def test_version_prefix_is_not_counted_as_a_segment(self):
+        # Without dropping the v1 prefix, /v1/schedules would count as 2 and a
+        # single-resource path as 3, inverting the whole classification.
+        C = transport.AuthenticatedHTTPXClient
+        assert C._path_is_nested_collection("https://api.rootly.com/v1/schedules") is False
+        assert C._path_is_nested_collection("https://api.rootly.com/v1/incidents/1") is False

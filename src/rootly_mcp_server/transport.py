@@ -1113,6 +1113,27 @@ class AuthenticatedHTTPXClient:
         return bool(last and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last)))
 
     @staticmethod
+    def _path_is_nested_collection(url: str) -> bool:
+        """Return True for a collection hanging off a parent id.
+
+        `/v1/incidents/{id}/action_items` and `/v1/incidents/{id}/events` are
+        collections, but the 404 usually means the parent id is wrong rather
+        than that the feature is locked. Only the trailing segment is checked
+        by `_path_has_id_segment`, and that segment is `action_items`, so these
+        would otherwise be read as top-level collections.
+
+        Depth is the discriminator rather than the shape of the id, because the
+        parent appears as a number (`4846`), a prefixed key (`INC-1742`) and a
+        UUID depending on the endpoint.
+        """
+        path = AuthenticatedHTTPXClient._path_for_url(url)
+        segments = [segment for segment in path.strip("/").split("/") if segment]
+        # Drop the API version prefix so /v1/incidents/{id}/events counts as 3.
+        if segments and segments[0].startswith("v") and segments[0][1:].isdigit():
+            segments = segments[1:]
+        return len(segments) >= 3
+
+    @staticmethod
     def _maybe_annotate_404_response(
         method: str, url: str, response: httpx.Response
     ) -> httpx.Response:
@@ -1122,20 +1143,24 @@ class AuthenticatedHTTPXClient:
         tier, even when the request is valid. The response body uses the generic
         title "Not found or unauthorized" with no plan-specific discriminator.
 
-        Heuristic: a 404 on a collection path (no trailing ID) is almost certainly
-        plan gating regardless of method.  A 404 on an ID path during a write is
-        ambiguous — the resource may simply not exist — so the hint is softened.
+        Heuristic: a 404 on a top-level collection path is almost certainly plan
+        gating regardless of method. Two cases are ambiguous and get a softened
+        hint instead: an ID path during a write, and a collection nested under a
+        parent id, where a wrong parent is the likelier cause than a locked
+        feature. Nested collections are the majority of 404s in practice, so
+        claiming plan gating for them would be wrong more often than right.
         """
         if response.status_code != 404:
             return response
         has_id = AuthenticatedHTTPXClient._path_has_id_segment(url)
+        is_nested = AuthenticatedHTTPXClient._path_is_nested_collection(url)
         is_write = method.upper() in {"POST", "PUT", "PATCH"}
         # Skip GET on ID paths — those are ordinary "resource not found" responses
         if has_id and not is_write:
             return response
         try:
             body = response.json()
-            if not has_id:
+            if not has_id and not is_nested:
                 hint = (
                     "This 404 most likely means the feature is not enabled on your Rootly plan. "
                     "Contact Rootly support to enable it for your organisation."
@@ -1496,7 +1521,10 @@ class AuthenticatedHTTPXClient:
             request.method, str(request.url), response
         )
         # Auto-generated tools reach the API through send(), not request(), so
-        # an annotator only applied on request() never reaches them.
+        # an annotator applied only on request() never reaches them. The plan
+        # gating hint matters most here: Rootly answers 404 for endpoints locked
+        # to a subscription tier, which is what these tools hit.
+        response = self._maybe_annotate_404_response(request.method, str(request.url), response)
         response = self._maybe_annotate_alert_routing_deprecation(
             request.method, str(request.url), response
         )
