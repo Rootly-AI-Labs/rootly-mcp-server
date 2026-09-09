@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`list_audits` reads the Rootly audit log**: who changed which configuration object, when, from where, and the before-and-after value of every modified field. Filters by `item_type`, user, API key, source and a `created_at` range. Two behaviours of the underlying endpoint are handled rather than passed through: a `404` is reported as the missing `Audits - read` role permission rather than as a missing record, and an empty result is annotated, because `filter[item_type]` accepts any value and silently matches nothing so a typo and "nothing changed" would otherwise be indistinguishable. Records are size-bounded and the full object state is opt-in.
+
 ### Changed
 
 - **The server no longer logs one line per request**: httpx logged an INFO line for every outbound API call, and uvicorn logged one for every inbound request. Together those were about two thirds of this service's log volume while duplicating records that already exist elsewhere — the platform router logs every inbound request with more detail (method, path, status, byte count, request id), and the transport logs every 4xx/5xx upstream response with status, method, URL and a body excerpt. Both are left enabled when the log level is `DEBUG`, where seeing every request is the point, and error reporting is unchanged at every level.

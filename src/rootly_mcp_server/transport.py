@@ -1072,6 +1072,7 @@ class AuthenticatedHTTPXClient:
         )
         response = self._maybe_annotate_404_response(method, url, response)
         response = self._maybe_annotate_alert_routing_deprecation(method, url, response)
+        response = self._maybe_annotate_offset_pagination_limit(method, url, response)
 
         return response
 
@@ -1112,6 +1113,27 @@ class AuthenticatedHTTPXClient:
         return bool(last and (last.isdigit() or AuthenticatedHTTPXClient._UUID_RE.match(last)))
 
     @staticmethod
+    def _path_is_nested_collection(url: str) -> bool:
+        """Return True for a collection hanging off a parent id.
+
+        `/v1/incidents/{id}/action_items` and `/v1/incidents/{id}/events` are
+        collections, but the 404 usually means the parent id is wrong rather
+        than that the feature is locked. Only the trailing segment is checked
+        by `_path_has_id_segment`, and that segment is `action_items`, so these
+        would otherwise be read as top-level collections.
+
+        Depth is the discriminator rather than the shape of the id, because the
+        parent appears as a number (`4846`), a prefixed key (`INC-1742`) and a
+        UUID depending on the endpoint.
+        """
+        path = AuthenticatedHTTPXClient._path_for_url(url)
+        segments = [segment for segment in path.strip("/").split("/") if segment]
+        # Drop the API version prefix so /v1/incidents/{id}/events counts as 3.
+        if segments and segments[0].startswith("v") and segments[0][1:].isdigit():
+            segments = segments[1:]
+        return len(segments) >= 3
+
+    @staticmethod
     def _maybe_annotate_404_response(
         method: str, url: str, response: httpx.Response
     ) -> httpx.Response:
@@ -1121,20 +1143,24 @@ class AuthenticatedHTTPXClient:
         tier, even when the request is valid. The response body uses the generic
         title "Not found or unauthorized" with no plan-specific discriminator.
 
-        Heuristic: a 404 on a collection path (no trailing ID) is almost certainly
-        plan gating regardless of method.  A 404 on an ID path during a write is
-        ambiguous — the resource may simply not exist — so the hint is softened.
+        Heuristic: a 404 on a top-level collection path is almost certainly plan
+        gating regardless of method. Two cases are ambiguous and get a softened
+        hint instead: an ID path during a write, and a collection nested under a
+        parent id, where a wrong parent is the likelier cause than a locked
+        feature. Nested collections are the majority of 404s in practice, so
+        claiming plan gating for them would be wrong more often than right.
         """
         if response.status_code != 404:
             return response
         has_id = AuthenticatedHTTPXClient._path_has_id_segment(url)
+        is_nested = AuthenticatedHTTPXClient._path_is_nested_collection(url)
         is_write = method.upper() in {"POST", "PUT", "PATCH"}
         # Skip GET on ID paths — those are ordinary "resource not found" responses
         if has_id and not is_write:
             return response
         try:
             body = response.json()
-            if not has_id:
+            if not has_id and not is_nested:
                 hint = (
                     "This 404 most likely means the feature is not enabled on your Rootly plan. "
                     "Contact Rootly support to enable it for your organisation."
@@ -1152,6 +1178,65 @@ class AuthenticatedHTTPXClient:
             response._content = json.dumps(body).encode()  # noqa: SLF001
         except Exception:  # nosec B110 - Safe fallback; annotation is best-effort
             pass
+        return response
+
+    @staticmethod
+    def _maybe_annotate_offset_pagination_limit(
+        method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Translate the 400 offset-pagination cap into a model-actionable hint.
+
+        Rootly rejects offset pagination past 50,000 records. The tools expose
+        `page_number` with no upper bound, so a model walking a large collection
+        page by page reaches the cap and, with nothing telling it what to do
+        differently, retries the same shape. One caller produced 1,271 of these
+        in six days against `list_alerts`.
+
+        The prose in the upstream body already names the remedy, but it arrives
+        as a sentence inside an errors array. A structured field is surfaced
+        instead so the caller can switch without re-reading the prose, matching
+        how the alert-routing deprecation is handled.
+        """
+        if response.status_code != 400:
+            return response
+        try:
+            body = response.json()
+        except Exception:  # nosec B110 - best-effort annotation
+            return response
+        if not isinstance(body, dict):
+            return response
+        errors = body.get("errors")
+        first_title = ""
+        if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+            first_title = str(errors[0].get("title", ""))
+        if "offset pagination is limited" not in first_title.lower():
+            return response
+        body.setdefault(
+            "_use_cursor_pagination",
+            {
+                "instead_of": "page_number",
+                "use": "page_after",
+                "reason": (
+                    "This request is past the offset-pagination cap. page_number "
+                    "cannot reach any further, so retrying it will keep failing."
+                ),
+                "how": (
+                    "Narrowing the query is usually the practical fix: a shorter "
+                    "created_at range, or a status/service filter, brings the "
+                    "result under the cap where page_number keeps working. To "
+                    "walk the whole collection instead, switch to cursors — "
+                    "request the first page without page_number, read "
+                    "meta.next_cursor, pass it as page_after, and repeat with "
+                    "each response's cursor. Filters are preserved across "
+                    "cursor pages. Note that a cursor walk restarts from the "
+                    "beginning; it cannot resume at the page you stopped on."
+                ),
+            },
+        )
+        try:
+            response._content = json.dumps(body).encode()  # noqa: SLF001
+        except Exception:  # nosec B110 - best-effort annotation
+            return response
         return response
 
     @staticmethod
@@ -1435,7 +1520,15 @@ class AuthenticatedHTTPXClient:
         response = self._maybe_normalize_incident_form_field_selection_response(
             request.method, str(request.url), response
         )
+        # Auto-generated tools reach the API through send(), not request(), so
+        # an annotator applied only on request() never reaches them. The plan
+        # gating hint matters most here: Rootly answers 404 for endpoints locked
+        # to a subscription tier, which is what these tools hit.
+        response = self._maybe_annotate_404_response(request.method, str(request.url), response)
         response = self._maybe_annotate_alert_routing_deprecation(
+            request.method, str(request.url), response
+        )
+        response = self._maybe_annotate_offset_pagination_limit(
             request.method, str(request.url), response
         )
         return response
