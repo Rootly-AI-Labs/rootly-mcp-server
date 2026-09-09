@@ -1,5 +1,6 @@
 """Focused tests for transport module."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -1379,3 +1380,183 @@ class TestAuthCaptureMiddlewareWWWAuthenticate:
             header_dict[b"www-authenticate"]
             == b'Bearer resource_metadata="https://mcp.rootly.com/.well-known/oauth-protected-resource"'
         )
+
+
+def _pagination_400(body: dict | list | str | None = None) -> httpx.Response:
+    """A 400 shaped like Rootly's offset-pagination rejection."""
+    if body is None:
+        body = {
+            "errors": [
+                {
+                    "title": (
+                        "Offset pagination is limited to 50000 records. Use "
+                        "cursor-based pagination (page[after]) for deeper results. "
+                        "The first page response includes a next_cursor value in "
+                        "the meta object."
+                    ),
+                    "status": "400",
+                }
+            ]
+        }
+    content = body if isinstance(body, bytes | str) else json.dumps(body)
+    if isinstance(content, str):
+        content = content.encode()
+    return httpx.Response(
+        status_code=400,
+        content=content,
+        request=httpx.Request("GET", "https://api.rootly.com/v1/alerts?page%5Bnumber%5D=5000"),
+    )
+
+
+@pytest.mark.unit
+class TestOffsetPaginationHint:
+    """The offset cap is reachable through page_number, and the cap is terminal.
+
+    One caller produced 1,271 of these against list_alerts in six days, retrying
+    the same shape because nothing in the response told it to switch.
+    """
+
+    def _annotate(self, response: httpx.Response) -> httpx.Response:
+        return transport.AuthenticatedHTTPXClient._maybe_annotate_offset_pagination_limit(
+            "GET", "https://api.rootly.com/v1/alerts", response
+        )
+
+    def test_offset_cap_gets_a_cursor_hint(self):
+        body = self._annotate(_pagination_400()).json()
+
+        hint = body["_use_cursor_pagination"]
+        assert hint["instead_of"] == "page_number"
+        assert hint["use"] == "page_after"
+        # The remedy has to name next_cursor, which is what the caller reads
+        # from the response to make progress.
+        assert "next_cursor" in hint["how"]
+
+    def test_hint_rules_out_retrying_the_same_shape(self):
+        # Retrying page_number produced 1,271 failures: the observed callers sat
+        # at pages 5,003-5,159 and reissued each roughly six times.
+        reason = self._annotate(_pagination_400()).json()["_use_cursor_pagination"]["reason"]
+        assert "page_number" in reason
+        assert "cannot reach any further" in reason or "keep failing" in reason
+
+    def test_hint_offers_narrowing_before_a_cursor_walk(self):
+        # The affected callers were walking a filtered range and crossed the cap
+        # at page 5,001. A cursor walk restarts from the beginning, so re-walking
+        # 50,000 records is worse advice than narrowing the range.
+        how = self._annotate(_pagination_400()).json()["_use_cursor_pagination"]["how"]
+        assert "filter" in how.lower(), "expected narrowing to be offered"
+        assert how.lower().index("narrow") < how.lower().index("cursor"), (
+            "narrowing should be offered before the cursor walk"
+        )
+
+    def test_hint_is_honest_that_a_cursor_walk_restarts(self):
+        # Without this the caller may believe page_after can resume where
+        # page_number stopped, which it cannot.
+        how = self._annotate(_pagination_400()).json()["_use_cursor_pagination"]["how"]
+        assert "restarts from the beginning" in how or "cannot resume" in how
+
+    def test_unrelated_400_is_left_alone(self):
+        other = _pagination_400({"errors": [{"title": "Page size exceeds maximum of 1000"}]})
+        assert "_use_cursor_pagination" not in self._annotate(other).json()
+
+    def test_non_400_is_left_alone(self):
+        ok = httpx.Response(
+            status_code=200,
+            content=json.dumps({"data": []}).encode(),
+            request=httpx.Request("GET", "https://api.rootly.com/v1/alerts"),
+        )
+        assert "_use_cursor_pagination" not in self._annotate(ok).json()
+
+    def test_non_dict_body_does_not_raise(self):
+        assert self._annotate(_pagination_400(["not", "a", "dict"])).status_code == 400
+
+    def test_non_json_body_does_not_raise(self):
+        assert self._annotate(_pagination_400("<html>gateway</html>")).status_code == 400
+
+    def test_existing_hint_is_not_overwritten(self):
+        body = {
+            "errors": [{"title": "Offset pagination is limited to 50000 records."}],
+            "_use_cursor_pagination": {"use": "already-set"},
+        }
+        got = self._annotate(_pagination_400(body)).json()
+        assert got["_use_cursor_pagination"] == {"use": "already-set"}
+
+
+@pytest.mark.unit
+class TestHintSurvivesToolErrorFormatting:
+    """Attaching the hint is worthless if the caller never sees it.
+
+    Auto-generated tools raise on 4xx. FastMCP builds the message from
+    e.response.json(), and e.response is the same object the annotator
+    mutated, so the hint travels inside the ValueError the model receives.
+    This pins that path rather than assuming it.
+    """
+
+    def test_hint_appears_in_the_error_message_the_caller_receives(self):
+        annotated = transport.AuthenticatedHTTPXClient._maybe_annotate_offset_pagination_limit(
+            "GET", "https://api.rootly.com/v1/alerts", _pagination_400()
+        )
+
+        # Mirrors fastmcp/server/providers/openapi/components.py: raise_for_status
+        # then rebuild the message from the response body.
+        try:
+            annotated.raise_for_status()
+            raise AssertionError("expected a 400 to raise")
+        except httpx.HTTPStatusError as exc:
+            message = f"HTTP error {exc.response.status_code}: {exc.response.reason_phrase}"
+            message += f" - {exc.response.json()}"
+
+        assert "_use_cursor_pagination" in message
+        assert "page_after" in message
+
+
+@pytest.mark.unit
+class TestAnnotatorsReachBothTransportPaths:
+    """Annotating in isolation is not enough; it has to be wired into both paths.
+
+    Auto-generated tools reach the API through send(); curated tools go through
+    request(). The 404 plan-gating hint was wired only into request(), so the
+    tools it was written for never received it, and the existing tests did not
+    catch that because they call the annotators directly.
+    """
+
+    def _client(self):
+        with patch.object(
+            transport.AuthenticatedHTTPXClient, "_get_api_token", return_value="token"
+        ):
+            return transport.AuthenticatedHTTPXClient(hosted=False, transport="stdio")
+
+    @pytest.mark.asyncio
+    async def test_request_path_annotates_the_offset_cap(self):
+        client = self._client()
+        client.client.request = AsyncMock(return_value=_pagination_400())
+
+        returned = await client.request("GET", "/v1/alerts")
+
+        assert "_use_cursor_pagination" in returned.json()
+
+    @pytest.mark.asyncio
+    async def test_send_path_annotates_the_offset_cap(self):
+        # send() is the path auto-generated tools use, including list_alerts.
+        client = self._client()
+        client.client.send = AsyncMock(return_value=_pagination_400())
+
+        returned = await client.send(httpx.Request("GET", "https://api.rootly.com/v1/alerts"))
+
+        assert "_use_cursor_pagination" in returned.json()
+
+    def test_response_strippers_leave_error_bodies_for_the_annotators(self):
+        # The strippers run before the annotators and rewrite _content. If one
+        # ever stopped skipping error responses it would replace the errors
+        # array the annotators match on, silently disabling every hint.
+        body = json.dumps({"errors": [{"title": "Offset pagination is limited to 50000 records."}]})
+        for stripper in (
+            transport.AuthenticatedHTTPXClient._maybe_strip_alert_response,
+            transport.AuthenticatedHTTPXClient._maybe_strip_collection_response,
+        ):
+            response = httpx.Response(
+                status_code=400,
+                content=body.encode(),
+                request=httpx.Request("GET", "https://api.rootly.com/v1/alerts"),
+            )
+            out = stripper("GET", "https://api.rootly.com/v1/alerts", response)
+            assert out.json() == json.loads(body), f"{stripper.__name__} altered an error body"

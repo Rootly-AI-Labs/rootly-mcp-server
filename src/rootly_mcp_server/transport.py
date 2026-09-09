@@ -1072,6 +1072,7 @@ class AuthenticatedHTTPXClient:
         )
         response = self._maybe_annotate_404_response(method, url, response)
         response = self._maybe_annotate_alert_routing_deprecation(method, url, response)
+        response = self._maybe_annotate_offset_pagination_limit(method, url, response)
 
         return response
 
@@ -1152,6 +1153,65 @@ class AuthenticatedHTTPXClient:
             response._content = json.dumps(body).encode()  # noqa: SLF001
         except Exception:  # nosec B110 - Safe fallback; annotation is best-effort
             pass
+        return response
+
+    @staticmethod
+    def _maybe_annotate_offset_pagination_limit(
+        method: str, url: str, response: httpx.Response
+    ) -> httpx.Response:
+        """Translate the 400 offset-pagination cap into a model-actionable hint.
+
+        Rootly rejects offset pagination past 50,000 records. The tools expose
+        `page_number` with no upper bound, so a model walking a large collection
+        page by page reaches the cap and, with nothing telling it what to do
+        differently, retries the same shape. One caller produced 1,271 of these
+        in six days against `list_alerts`.
+
+        The prose in the upstream body already names the remedy, but it arrives
+        as a sentence inside an errors array. A structured field is surfaced
+        instead so the caller can switch without re-reading the prose, matching
+        how the alert-routing deprecation is handled.
+        """
+        if response.status_code != 400:
+            return response
+        try:
+            body = response.json()
+        except Exception:  # nosec B110 - best-effort annotation
+            return response
+        if not isinstance(body, dict):
+            return response
+        errors = body.get("errors")
+        first_title = ""
+        if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+            first_title = str(errors[0].get("title", ""))
+        if "offset pagination is limited" not in first_title.lower():
+            return response
+        body.setdefault(
+            "_use_cursor_pagination",
+            {
+                "instead_of": "page_number",
+                "use": "page_after",
+                "reason": (
+                    "This request is past the offset-pagination cap. page_number "
+                    "cannot reach any further, so retrying it will keep failing."
+                ),
+                "how": (
+                    "Narrowing the query is usually the practical fix: a shorter "
+                    "created_at range, or a status/service filter, brings the "
+                    "result under the cap where page_number keeps working. To "
+                    "walk the whole collection instead, switch to cursors — "
+                    "request the first page without page_number, read "
+                    "meta.next_cursor, pass it as page_after, and repeat with "
+                    "each response's cursor. Filters are preserved across "
+                    "cursor pages. Note that a cursor walk restarts from the "
+                    "beginning; it cannot resume at the page you stopped on."
+                ),
+            },
+        )
+        try:
+            response._content = json.dumps(body).encode()  # noqa: SLF001
+        except Exception:  # nosec B110 - best-effort annotation
+            return response
         return response
 
     @staticmethod
@@ -1435,7 +1495,12 @@ class AuthenticatedHTTPXClient:
         response = self._maybe_normalize_incident_form_field_selection_response(
             request.method, str(request.url), response
         )
+        # Auto-generated tools reach the API through send(), not request(), so
+        # an annotator only applied on request() never reaches them.
         response = self._maybe_annotate_alert_routing_deprecation(
+            request.method, str(request.url), response
+        )
+        response = self._maybe_annotate_offset_pagination_limit(
             request.method, str(request.url), response
         )
         return response
