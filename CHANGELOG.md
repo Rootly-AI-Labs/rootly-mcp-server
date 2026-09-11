@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`rootly://workflow-guide` and the example incident-responder skill name tools by their advertised `snake_case` names**: both still used the historical camelCase operationIds (`createIncident`, `listIncidentAlerts`, `getScheduleShifts`, …). Those names remain callable through the alias middleware but are hidden from `tools/list`, so the guidance pointed the model at tools it could not see. A unit test now fails if either document references a tool that is not advertised.
 - **`search_incidents` returns the number of results asked for**: a single page was capped at the page size rather than the requested maximum.
 
+### Changed
+
+- **AgentCat telemetry SDK upgraded to 2.1.0**: session ID is prepended with a low footprint to avoid truncation on large responses, instruction text is emitted only on the first response, and session-ID handling is less strict. Telemetry-only; integration code unchanged.
+
 ### Security
 
 - **Raised the `cryptography` and `pip` floors** to clear three advisories: a PKCS#7 `EnvelopedData` Bleichenbacher oracle (high), and two moderate pip issues covering doubly-encoded index URLs and path traversal via `console_scripts` entry point names.
