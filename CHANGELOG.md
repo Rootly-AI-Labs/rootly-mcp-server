@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`get_incident_meeting_transcripts` reads an incident's call transcripts in one call**: previously this took a list call followed by one fetch per recording, and the raw payloads are word-level. Transcripts are collapsed into speaker turns, silent recordings are skipped rather than consuming the budget, and the result is bounded so a long call cannot crowd out the rest of a conversation.
 - **Every tool declares its safety hints**: `readOnlyHint`, `destructiveHint` and `openWorldHint` are now set across the whole surface, including the tool the telemetry SDK injects. Unset hints default to the cautious answer, so omitting them made read-only tools look potentially destructive to clients that surface those hints to users.
 
+### Changed
+
+- **The server no longer logs one line per request**: httpx logged an INFO line for every outbound API call, and uvicorn logged one for every inbound request. Together those were about two thirds of this service's log volume while duplicating records that already exist elsewhere — the platform router logs every inbound request with more detail (method, path, status, byte count, request id), and the transport logs every 4xx/5xx upstream response with status, method, URL and a body excerpt. Both are left enabled when the log level is `DEBUG`, where seeing every request is the point, and error reporting is unchanged at every level.
+
 ### Fixed
 
 - **A 404 from an auto-generated tool now carries the plan-gating hint**: Rootly answers 404 for endpoints locked to a subscription tier, and a hint explaining that already existed — but it was only applied on the transport path curated tools use. Auto-generated tools reach the API through a different path and never received it. The hint is also no longer confidently blamed on the plan for a collection nested under a parent id, such as `/v1/incidents/{id}/action_items`, where a missing parent is the likelier cause; those were the majority of these responses in practice.
