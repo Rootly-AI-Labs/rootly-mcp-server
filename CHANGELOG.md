@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hosted stateless MCP responses use JSON framing by default**: `/mcp` previously
+  returned one-shot SSE streams even in stateless mode. Newer MCP clients could see
+  the stream close before correlating the `tools/list` response, leaving them with no
+  tools. Hosted deployments now return the single response as JSON while preserving
+  `FASTMCP_JSON_RESPONSE` as an explicit operator override.
 - **`rootly://workflow-guide` and the example incident-responder skill name tools by their advertised `snake_case` names**: both still used the historical camelCase operationIds (`createIncident`, `listIncidentAlerts`, `getScheduleShifts`, …). Those names remain callable through the alias middleware but are hidden from `tools/list`, so the guidance pointed the model at tools it could not see. A unit test now fails if either document references a tool that is not advertised.
 
 ## [2.3.18] - Released 2026-08-29

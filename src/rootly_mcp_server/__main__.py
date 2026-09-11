@@ -90,6 +90,19 @@ def streamable_http_stateless_enabled(*, hosted: bool, fastmcp_stateless_http: b
     return hosted
 
 
+def streamable_http_json_response_enabled(*, hosted: bool, fastmcp_json_response: bool) -> bool:
+    """Choose streamable HTTP response framing for hosted deployments.
+
+    A stateless request has exactly one response, so JSON framing avoids keeping
+    a one-shot SSE stream open and interoperates with both MCP 1 and MCP 2
+    clients. Preserve FastMCP's configured value when the operator explicitly
+    sets ``FASTMCP_JSON_RESPONSE``.
+    """
+    if "FASTMCP_JSON_RESPONSE" in os.environ:
+        return fastmcp_json_response
+    return hosted
+
+
 def resolve_requested_hosted_tool_profile(
     *,
     query_params: Mapping[str, str] | None = None,
@@ -433,8 +446,13 @@ def run_dual_http_server(
     stateless_http = streamable_http_stateless_enabled(
         hosted=True, fastmcp_stateless_http=fastmcp.settings.stateless_http
     )
+    json_response = streamable_http_json_response_enabled(
+        hosted=True, fastmcp_json_response=fastmcp.settings.json_response
+    )
     logger.info(
-        "Streamable HTTP configured in %s mode", "stateless" if stateless_http else "stateful"
+        "Streamable HTTP configured in %s mode with %s responses",
+        "stateless" if stateless_http else "stateful",
+        "JSON" if json_response else "SSE",
     )
 
     sse_transport = SseServerTransport(message_path)
@@ -478,7 +496,7 @@ def run_dual_http_server(
             app=profiled_server._mcp_server,  # noqa: SLF001
             event_store=None,
             retry_interval=None,
-            json_response=fastmcp.settings.json_response,
+            json_response=json_response,
             stateless=stateless_http,
         )
         for profile, profiled_server in profiled_servers.items()
@@ -515,7 +533,7 @@ def run_dual_http_server(
                 app=profiled_server._mcp_server,  # noqa: SLF001
                 event_store=None,
                 retry_interval=None,
-                json_response=fastmcp.settings.json_response,
+                json_response=json_response,
                 stateless=stateless_http,
             )
             for profile, profiled_server in profiled_code_mode_servers.items()
@@ -638,8 +656,13 @@ def run_profiled_streamable_http_server(
     stateless_http = streamable_http_stateless_enabled(
         hosted=True, fastmcp_stateless_http=fastmcp.settings.stateless_http
     )
+    json_response = streamable_http_json_response_enabled(
+        hosted=True, fastmcp_json_response=fastmcp.settings.json_response
+    )
     logger.info(
-        "Streamable HTTP configured in %s mode", "stateless" if stateless_http else "stateful"
+        "Streamable HTTP configured in %s mode with %s responses",
+        "stateless" if stateless_http else "stateful",
+        "JSON" if json_response else "SSE",
     )
 
     profiled_servers = profiled_servers or {default_tool_profile: server}
@@ -648,7 +671,7 @@ def run_profiled_streamable_http_server(
             app=profiled_server._mcp_server,  # noqa: SLF001
             event_store=None,
             retry_interval=None,
-            json_response=fastmcp.settings.json_response,
+            json_response=json_response,
             stateless=stateless_http,
         )
         for profile, profiled_server in profiled_servers.items()
@@ -853,6 +876,11 @@ def main():
             fastmcp_stateless_http=os.getenv("FASTMCP_STATELESS_HTTP", "").lower()
             in ("true", "1", "yes"),
         )
+        direct_streamable_json_response = streamable_http_json_response_enabled(
+            hosted=hosted_mode,
+            fastmcp_json_response=os.getenv("FASTMCP_JSON_RESPONSE", "").lower()
+            in ("true", "1", "yes"),
+        )
         if normalized_transport == "both":
             run_dual_http_server(
                 server=server,
@@ -889,6 +917,7 @@ def main():
                 }
                 if normalized_transport == "streamable-http":
                     run_kwargs["stateless_http"] = direct_streamable_stateless_http
+                    run_kwargs["json_response"] = direct_streamable_json_response
                 server.run(**run_kwargs)
 
     except FileNotFoundError as e:

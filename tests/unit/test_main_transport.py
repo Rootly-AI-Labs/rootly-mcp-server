@@ -19,6 +19,7 @@ from rootly_mcp_server.__main__ import (
     normalize_transport,
     resolve_requested_hosted_tool_profile,
     run_profiled_streamable_http_server,
+    streamable_http_json_response_enabled,
     streamable_http_stateless_enabled,
 )
 from rootly_mcp_server.telemetry_scrubber import redact_agentcat_telemetry_text
@@ -310,6 +311,29 @@ def test_streamable_http_respects_explicit_fastmcp_setting():
 
     with patch.dict("os.environ", {"FASTMCP_STATELESS_HTTP": "true"}, clear=True):
         assert streamable_http_stateless_enabled(hosted=False, fastmcp_stateless_http=True) is True
+
+
+def test_streamable_http_defaults_hosted_mode_to_json_responses():
+    with patch.dict("os.environ", {}, clear=True):
+        assert (
+            streamable_http_json_response_enabled(hosted=True, fastmcp_json_response=False) is True
+        )
+        assert (
+            streamable_http_json_response_enabled(hosted=False, fastmcp_json_response=False)
+            is False
+        )
+
+
+def test_streamable_http_respects_explicit_json_response_setting():
+    with patch.dict("os.environ", {"FASTMCP_JSON_RESPONSE": "false"}, clear=True):
+        assert (
+            streamable_http_json_response_enabled(hosted=True, fastmcp_json_response=False) is False
+        )
+
+    with patch.dict("os.environ", {"FASTMCP_JSON_RESPONSE": "true"}, clear=True):
+        assert (
+            streamable_http_json_response_enabled(hosted=False, fastmcp_json_response=True) is True
+        )
 
 
 def test_maybe_enable_mcpcat_tracking_is_noop_without_project_id():
@@ -834,6 +858,7 @@ def test_main_hosted_streamable_http_with_explicit_enabled_tools_skips_profiled_
     main_server.run.assert_called_once()
     assert main_server.run.call_args.kwargs["transport"] == "streamable-http"
     assert main_server.run.call_args.kwargs["stateless_http"] is True
+    assert main_server.run.call_args.kwargs["json_response"] is True
     assert main_server.run.call_args.kwargs["middleware"] == []
 
 
@@ -981,6 +1006,8 @@ async def test_run_profiled_streamable_http_server_routes_requests_by_profile():
         )
 
     assert captured["server_run_called"] is True
+    assert fake_apps["full-server"].session_manager.json_response is True
+    assert fake_apps["slim-server"].session_manager.json_response is True
     route = cast(Any, captured["routes"][0])
 
     full_request = Request(
