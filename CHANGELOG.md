@@ -7,13 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.19] - Released 2026-09-09
+
 ### Added
 
 - **`list_audits` reads the Rootly audit log**: who changed which configuration object, when, from where, and the before-and-after value of every modified field. Filters by `item_type`, user, API key, source and a `created_at` range. Two behaviours of the underlying endpoint are handled rather than passed through: a `404` is reported as the missing `Audits - read` role permission rather than as a missing record, and an empty result is annotated, because `filter[item_type]` accepts any value and silently matches nothing so a typo and "nothing changed" would otherwise be indistinguishable. Records are size-bounded and the full object state is opt-in.
+- **`get_incident_meeting_transcripts` reads an incident's call transcripts in one call**: previously this took a list call followed by one fetch per recording, and the raw payloads are word-level. Transcripts are collapsed into speaker turns, silent recordings are skipped rather than consuming the budget, and the result is bounded so a long call cannot crowd out the rest of a conversation.
+- **Every tool declares its safety hints**: `readOnlyHint`, `destructiveHint` and `openWorldHint` are now set across the whole surface, including the tool the telemetry SDK injects. Unset hints default to the cautious answer, so omitting them made read-only tools look potentially destructive to clients that surface those hints to users.
 
 ### Fixed
 
+- **A 404 from an auto-generated tool now carries the plan-gating hint**: Rootly answers 404 for endpoints locked to a subscription tier, and a hint explaining that already existed — but it was only applied on the transport path curated tools use. Auto-generated tools reach the API through a different path and never received it. The hint is also no longer confidently blamed on the plan for a collection nested under a parent id, such as `/v1/incidents/{id}/action_items`, where a missing parent is the likelier cause; those were the majority of these responses in practice.
+- **Hitting the offset-pagination cap now says what to do instead**: requests past the cap were rejected with the remedy buried in prose, and callers retried the same shape. The response now carries a structured field naming the cursor parameter, and leading with narrowing the query, since a cursor walk restarts from the beginning.
 - **`rootly://workflow-guide` and the example incident-responder skill name tools by their advertised `snake_case` names**: both still used the historical camelCase operationIds (`createIncident`, `listIncidentAlerts`, `getScheduleShifts`, …). Those names remain callable through the alias middleware but are hidden from `tools/list`, so the guidance pointed the model at tools it could not see. A unit test now fails if either document references a tool that is not advertised.
+- **`search_incidents` returns the number of results asked for**: a single page was capped at the page size rather than the requested maximum.
+
+### Changed
+
+- **AgentCat telemetry SDK upgraded to 2.1.0**: session ID is prepended with a low footprint to avoid truncation on large responses, instruction text is emitted only on the first response, and session-ID handling is less strict. Telemetry-only; integration code unchanged.
+
+### Security
+
+- **Raised the `cryptography` and `pip` floors** to clear three advisories: a PKCS#7 `EnvelopedData` Bleichenbacher oracle (high), and two moderate pip issues covering doubly-encoded index URLs and path traversal via `console_scripts` entry point names.
 
 ## [2.3.18] - Released 2026-08-29
 
